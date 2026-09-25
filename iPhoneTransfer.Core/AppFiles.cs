@@ -19,6 +19,34 @@ public static partial class IPhoneClient
         => Task.Run(() => WithAppDocuments(udid, bundleId, ct,
             (api, afc) => ImportAppFiles(api, afc, devicePaths, destination, progress, ct)), ct);
 
+    /// <summary>Copy one app document to a new local preview file using its app's AFC service.</summary>
+    public static Task CopyAppFileToFileAsync(string udid, string bundleId, AppFileItem item,
+        string destination, CancellationToken ct = default)
+        => Task.Run(() => WithAppDocuments(udid, bundleId, ct, (api, afc) =>
+        {
+            CopyAppPreviewFile(api, afc, item, destination, ct);
+            return true;
+        }), ct);
+
+    private static void CopyAppPreviewFile(IAfcApi api, AfcClientHandle afc, AppFileItem item,
+        string destination, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        EnsureAppParents(api, afc, item.DevicePath);
+        var current = ReadAppEntry(api, afc, item.DevicePath);
+        if (current.IsDirectory || current.IsSymbolicLink) throw new IOException("일반 파일만 미리볼 수 있습니다.");
+        if (current.Size != item.Size) throw new IOException("원본 크기가 달라졌습니다. 앱 파일 목록을 다시 불러오세요.");
+        var partial = destination + "." + Guid.NewGuid().ToString("N") + ".partial";
+        try
+        {
+            ReadDeviceFile(api, afc, item.DevicePath, partial, ct);
+            ct.ThrowIfCancellationRequested();
+            if (new FileInfo(partial).Length != item.Size) throw new IOException("앱 미리보기 파일 크기가 원본과 다릅니다.");
+            File.Move(partial, destination); // A preview must never replace an existing local file.
+        }
+        finally { if (File.Exists(partial)) File.Delete(partial); }
+    }
+
     private static T WithAppDocuments<T>(string udid, string bundleId, CancellationToken ct,
         Func<IAfcApi, AfcClientHandle, T> action)
     {

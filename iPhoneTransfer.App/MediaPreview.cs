@@ -11,19 +11,28 @@ internal static class MediaPreview
     // Limit concurrent native decoders and USB preview transfers. Originals are never changed.
     private static readonly SemaphoreSlim Gate = new(1, 1);
     internal static string FfmpegPath => Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
-    internal static bool IsVideo(string name) => Path.GetExtension(name).ToLowerInvariant() is ".mov" or ".mp4" or ".m4v" or ".avi";
+    internal static bool IsVideo(string name) => Path.GetExtension(name).ToLowerInvariant() is ".mov" or ".mp4" or ".m4v" or ".avi" or ".mkv" or ".webm";
+    internal static bool IsImage(string name) => Path.GetExtension(name).ToLowerInvariant() is
+        ".jpg" or ".jpeg" or ".png" or ".heic" or ".heif" or ".tif" or ".tiff" or ".gif" or ".bmp" or ".webp" or ".dng" or ".avif";
 
-    internal static async Task<BitmapSource> LoadAsync(string udid, PhotoItem item, int width, CancellationToken ct)
+    internal static Task<BitmapSource> LoadAsync(string udid, PhotoItem item, int width, CancellationToken ct)
+        => LoadFileAsync(item.FileName, width, (path, token) => IPhoneClient.CopyPhotoToFileAsync(udid, item, path, token), ct);
+
+    internal static Task<BitmapSource> LoadAppAsync(string udid, string bundleId, AppFileItem item, int width, CancellationToken ct)
+        => LoadFileAsync(item.Name, width, (path, token) => IPhoneClient.CopyAppFileToFileAsync(udid, bundleId, item, path, token), ct);
+
+    internal static async Task<BitmapSource> LoadFileAsync(string name, int width,
+        Func<string, CancellationToken, Task> copyFile, CancellationToken ct)
     {
         await Gate.WaitAsync(ct);
         var folder = Path.Combine(Path.GetTempPath(), "iPhoneTransfer-preview", Guid.NewGuid().ToString("N"));
         try
         {
             Directory.CreateDirectory(folder);
-            var path = Path.Combine(folder, "source" + Path.GetExtension(item.FileName));
-            await IPhoneClient.CopyPhotoToFileAsync(udid, item, path, ct);
+            var path = Path.Combine(folder, "source" + Path.GetExtension(name));
+            await copyFile(path, ct);
             ct.ThrowIfCancellationRequested();
-            return IsVideo(item.FileName)
+            return IsVideo(name)
                 ? await VideoFrameAsync(path, width, ct)
                 : await Task.Run(() => DecodeImage(path, width), ct);
         }

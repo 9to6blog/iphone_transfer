@@ -3,6 +3,32 @@
 
  <Window.Resources>
   <SolidColorBrush x:Key="Ink" Color="#14243A"/>
+  <ItemsPanelTemplate x:Key="AppWrapPanel"><WrapPanel/></ItemsPanelTemplate>
+  <ItemsPanelTemplate x:Key="AppStackPanel"><VirtualizingStackPanel/></ItemsPanelTemplate>
+  <DataTemplate x:Key="AppTileTemplate">
+   <Grid x:Name="AppTileBody" Width="150" Height="148" Margin="3" ToolTip="{Binding Tooltip}">
+    <Grid.RowDefinitions><RowDefinition Height="100"/><RowDefinition Height="25"/><RowDefinition Height="23"/></Grid.RowDefinitions>
+    <Border Background="#EFF3F9" CornerRadius="8" BorderBrush="#DCE3ED" BorderThickness="1" ClipToBounds="True">
+     <Grid>
+      <TextBlock Text="{Binding Placeholder}" Foreground="#718096" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8"/>
+      <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+      <Border HorizontalAlignment="Right" VerticalAlignment="Top" Background="#C014243A" CornerRadius="4" Margin="4" Padding="5,2"><TextBlock Text="{Binding MediaLabel}" FontSize="10" Foreground="White"/></Border>
+      <Border x:Name="AppSelectionMark" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#2864EA" CornerRadius="9" Width="19" Height="19" Margin="4"><TextBlock Text="✓" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+     </Grid>
+    </Border>
+    <TextBlock Grid.Row="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" VerticalAlignment="Center"/>
+    <TextBlock Grid.Row="2" Text="{Binding Detail}" FontSize="11" Foreground="#64748B"/>
+   </Grid>
+   <DataTemplate.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}" Value="True"><Setter TargetName="AppTileBody" Property="Background" Value="#EAF2FF"/><Setter TargetName="AppSelectionMark" Property="Visibility" Value="Visible"/></DataTrigger></DataTemplate.Triggers>
+  </DataTemplate>
+  <GridView x:Key="AppDetailsView">
+   <GridViewColumn Header="미리보기" Width="70"><GridViewColumn.CellTemplate><DataTemplate>
+    <Grid Width="52" Height="40" ToolTip="{Binding Tooltip}"><TextBlock Text="{Binding MediaLabel}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#64748B"/><Image Source="{Binding Thumbnail}" Stretch="Uniform"/></Grid>
+   </DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+   <GridViewColumn Header="이름" Width="185" DisplayMemberBinding="{Binding Name}"/>
+   <GridViewColumn Header="크기" Width="75" DisplayMemberBinding="{Binding SizeText}"/>
+   <GridViewColumn Header="수정 날짜" Width="170" DisplayMemberBinding="{Binding DateText}"/>
+  </GridView>
   <Style TargetType="Button">
    <Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#283A53"/>
    <Setter Property="BorderBrush" Value="#DCE3ED"/><Setter Property="BorderThickness" Value="1"/>
@@ -43,7 +69,7 @@
   <Grid.ColumnDefinitions><ColumnDefinition Width="202"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
   <Border Background="#14243A"><DockPanel Margin="20,28,20,24">
    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,34"><Border Background="#2864EA" CornerRadius="13" Width="44" Height="44" HorizontalAlignment="Left"><TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="iPhoneTransfer" Foreground="White" FontSize="19" FontWeight="Bold" Margin="0,16,0,6"/><TextBlock Text="사진과 파일, 편안하게." Foreground="#95A8C3" FontSize="12"/></StackPanel>
-   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.2" FontSize="10" Foreground="#738DAE"/></StackPanel>
+   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.3" FontSize="10" Foreground="#738DAE"/></StackPanel>
    <StackPanel><TextBlock Text="WORKSPACE" Foreground="#738DAE" FontSize="10" Margin="10,0,0,14"/>
     <Button x:Name="PhotosNav" Style="{StaticResource NavButton}" Content="사진 가져오기" Tag="0" Click="Navigate_Click"/>
     <Button x:Name="SendNav" Style="{StaticResource NavButton}" Content="앱 파일" Tag="1" Click="Navigate_Click"/>
@@ -52,15 +78,15 @@
   </DockPanel></Border>
   <Grid Grid.Column="1" Margin="26,24,26,20">
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <Grid Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid x:Name="PageHeader" Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <StackPanel><TextBlock x:Name="PageTitle" Text="사진 가져오기" FontSize="27" FontWeight="Bold"/><TextBlock x:Name="PageSubtitle" Text="아이폰에 담긴 순간을, PC에서도 오래도록." Foreground="#718096" Margin="0,7,0,0"/></StackPanel>
     <Border Grid.Column="1" Background="#E8EEF8" CornerRadius="14" Padding="12,6" VerticalAlignment="Top"><TextBlock Text="Windows 10 · 11 / x64" FontSize="11" Foreground="#536A8B"/></Border>
    </Grid>
-   <Border Grid.Row="1" Background="White" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,0,0,18">
+   <Border x:Name="ConnectionCard" Grid.Row="1" Background="White" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,0,0,18">
     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
      <Border Background="#EDF3FF" CornerRadius="12" Width="40" Height="48" VerticalAlignment="Top"><TextBlock Text="&#xE8EA;" FontFamily="Segoe MDL2 Assets" Foreground="#2864EA" FontSize="24" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
      <StackPanel Grid.Column="1"><TextBlock x:Name="ConnectionTitle" Text="아이폰을 찾고 있습니다" FontSize="16" FontWeight="Bold"/><TextBlock x:Name="ConnectionDetail" Text="USB 케이블을 연결하고 아이폰의 잠금을 해제하세요." TextWrapping="Wrap" Foreground="#64748B" Margin="0,6,12,10"/><ComboBox x:Name="DeviceCombo" MaxWidth="450" HorizontalAlignment="Stretch" SelectionChanged="DeviceCombo_SelectionChanged"/></StackPanel>
-     <StackPanel Grid.Column="2"><Button x:Name="RefreshDevicesBtn" Content="다시 검색" Click="RefreshDevices_Click" Margin="0,0,0,8"/><Button Content="연결 도움받기" Tag="2" Click="Navigate_Click" Margin="0"/></StackPanel>
+     <StackPanel Grid.Column="2"><Button x:Name="RefreshDevicesBtn" Content="다시 검색" Click="RefreshDevices_Click" Margin="0,0,0,8"/><Button x:Name="ConnectionHelpBtn" Content="연결 도움받기" Tag="2" Click="Navigate_Click" Margin="0"/></StackPanel>
     </Grid>
    </Border>
    <Border Grid.Row="2" Background="White" CornerRadius="14" BorderBrush="#DEE6F0" BorderThickness="1" Padding="18"><TabControl x:Name="MainTabs">
@@ -200,6 +226,8 @@
                       <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <RadioButton x:Name="AppReadRadio" Content="앱에서 가져오기" GroupName="AppDirection" IsChecked="True" Checked="AppDirection_Checked" Margin="0,0,24,0" FontWeight="SemiBold"/>
                         <RadioButton x:Name="AppSendRadio" Content="앱으로 보내기" GroupName="AppDirection" Checked="AppDirection_Checked"/>
+                        <RadioButton x:Name="AppGridRadio" Content="그리드" GroupName="AppView" IsChecked="True" Checked="AppView_Checked" Margin="30,0,14,0"/>
+                        <RadioButton x:Name="AppListRadio" Content="목록" GroupName="AppView" Checked="AppView_Checked"/>
                       </StackPanel>
                       <Grid x:Name="AppReadPane" Grid.Row="1">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -208,22 +236,28 @@
                           <Button x:Name="AppParentBtn" Content="상위 폴더" Click="AppParent_Click" IsEnabled="False"/>
                           <Button x:Name="AppSelectAllBtn" Content="모두 선택" Click="AppSelectAll_Click"/>
                           <Button x:Name="AppClearSelectionBtn" Content="선택 해제" Click="AppClearSelection_Click"/>
+                          <Button x:Name="AppLargePreviewBtn" Content="크게 보기" Click="AppLargePreview_Click" IsEnabled="False"/>
                         </WrapPanel>
                         <TextBlock x:Name="AppFolderText" Grid.Row="1" Text="/Documents" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="0,0,0,4"/>
                         <Grid Grid.Row="2">
-                          <ListView x:Name="AppFileList" SelectionMode="Extended" SelectionChanged="AppFileList_SelectionChanged" MouseDoubleClick="AppFileList_DoubleClick" KeyDown="AppFileList_KeyDown">
-                            <ListView.View><GridView>
-                              <GridViewColumn Header="이름" Width="260" DisplayMemberBinding="{Binding Name}"/>
-                              <GridViewColumn Header="종류" Width="120" DisplayMemberBinding="{Binding Kind}"/>
-                              <GridViewColumn Header="크기" Width="90" DisplayMemberBinding="{Binding SizeText}"/>
-                              <GridViewColumn Header="수정 날짜" Width="170" DisplayMemberBinding="{Binding DateText}"/>
-                            </GridView></ListView.View>
-                          </ListView>
-                          <TextBlock x:Name="AppFilesEmpty" Text="앱을 선택하고 ‘앱 파일 불러오기’를 누르세요." Foreground="#718096" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Margin="16"/>
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="225"/></Grid.ColumnDefinitions>
+                          <Grid>
+                            <ListView x:Name="AppFileList" SelectionMode="Extended" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" BorderThickness="0"
+                              ItemsPanel="{StaticResource AppWrapPanel}" ItemTemplate="{StaticResource AppTileTemplate}"
+                              SelectionChanged="AppFileList_SelectionChanged" MouseDoubleClick="AppFileList_DoubleClick" KeyDown="AppFileList_KeyDown"/>
+                            <TextBlock x:Name="AppFilesEmpty" Text="앱을 선택하고 ‘앱 파일 불러오기’를 누르세요." Foreground="#718096" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Margin="16"/>
+                          </Grid>
+                          <Border Grid.Column="1" Margin="8,0,0,0" Padding="10" Background="#F5F7FA" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10">
+                            <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                              <TextBlock Text="사진·영상 미리보기" Foreground="#64748B" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                              <Grid Grid.Row="1"><Image x:Name="AppPreviewImage" Stretch="Uniform"/><TextBlock x:Name="AppPreviewMessage" Text="사진·영상을 선택하면&#10;미리보기가 표시됩니다.&#10;&#10;더블클릭으로 크게 보기" Foreground="#718096" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
+                              <TextBlock x:Name="AppPreviewCaption" Grid.Row="2" Foreground="#475569" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+                            </Grid>
+                          </Border>
                         </Grid>
                         <StackPanel Grid.Row="3" Margin="0,10,0,0">
                           <WrapPanel><Button x:Name="ImportAppFilesBtn" Content="선택 항목 PC로 가져오기" Style="{StaticResource PrimaryButton}" Click="ImportAppFiles_Click" IsEnabled="False"/><TextBlock x:Name="AppSelectionText" VerticalAlignment="Center" Foreground="#64748B" Margin="4,0,0,6"/></WrapPanel>
-                          <TextBlock Text="폴더 더블클릭: 열기 · Ctrl/Shift: 여러 항목 선택 · 폴더를 가져오면 하위 파일도 함께 저장됩니다." Foreground="#64748B" FontSize="11" TextWrapping="Wrap"/>
+                          <TextBlock Text="더블클릭: 폴더 열기 / 사진·영상 크게보기 · Ctrl/Shift: 여러 항목 선택" Foreground="#64748B" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
                       </Grid>
                       <Grid x:Name="AppSendPane" Grid.Row="1" Visibility="Collapsed">

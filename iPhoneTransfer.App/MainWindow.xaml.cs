@@ -65,12 +65,13 @@ public partial class MainWindow : Window
             LoadAppsBtn, AddFilesBtn, ClearFilesBtn, SendBtn, DiagnoseBtn, InstallAppleBtn, RepairBtn, InstallITunesBtn
         })
             b.IsEnabled = !busy;
-        if (CancelBtn != null) CancelBtn.IsEnabled = busy;
+        UpdateCancelButton();
         DeviceCombo.IsEnabled = !busy;
         AppCombo.IsEnabled = !busy;
         ConvertJpegCheck.IsEnabled = !busy;
         FilesToSend.AllowDrop = !busy;
         AppReadRadio.IsEnabled = AppSendRadio.IsEnabled = !busy;
+        AppGridRadio.IsEnabled = AppListRadio.IsEnabled = !busy;
         AppFileList.IsEnabled = !busy;
         UpdateAppBrowserButtons();
     }
@@ -78,6 +79,7 @@ public partial class MainWindow : Window
     /// <summary>취소 가능한 작업을 시작하고 토큰을 돌려준다.</summary>
     private CancellationToken BeginOp()
     {
+        CancelAppMedia();
         _thumbCts?.Cancel();
         _previewCts?.Cancel();
         _opCts?.Dispose();
@@ -91,8 +93,14 @@ public partial class MainWindow : Window
         _opCts = null;
     }
 
+    private void UpdateCancelButton()
+    {
+        if (CancelBtn != null) CancelBtn.IsEnabled = _busy || _thumbCts != null || _previewCts != null || _appThumbCts != null || _appPreviewCts != null;
+    }
+
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
+        _appThumbCts?.Cancel(); _appPreviewCts?.Cancel();
         _opCts?.Cancel();
         _thumbCts?.Cancel();
         _previewCts?.Cancel();
@@ -312,7 +320,7 @@ public partial class MainWindow : Window
             if (ReferenceEquals(_previewCts, cts))
             {
                 _previewCts = null;
-                if (!_busy) CancelBtn.IsEnabled = false;
+                UpdateCancelButton();
                 if (!cts.IsCancellationRequested && !_busy && !_lifetime.IsCancellationRequested && PhotoGrid.Visibility == Visibility.Visible)
                     StartThumbnailLoad();
             }
@@ -340,7 +348,7 @@ public partial class MainWindow : Window
     /// <summary>사진 및 영상 미리보기를 순서대로 생성한다. 재시도와 취소는 현재 로드에만 반영한다.</summary>
     private async void StartThumbnailLoad()
     {
-        if (CurrentDevice == null || _busy) return;
+        if (CurrentDevice == null || _busy || MainTabs.SelectedIndex != 0) return;
         _thumbCts?.Cancel();
         var pending = _photos.Where(p => p.Thumbnail == null).ToList();
         if (pending.Count == 0) return;
@@ -382,7 +390,7 @@ public partial class MainWindow : Window
         catch (System.Exception) { if (!cts.IsCancellationRequested) StatusText.Text = "썸네일 일부 실패"; }
         finally
         {
-            if (ReferenceEquals(_thumbCts, cts)) { _thumbCts = null; CancelBtn.IsEnabled = _busy || _previewCts != null; }
+            if (ReferenceEquals(_thumbCts, cts)) { _thumbCts = null; UpdateCancelButton(); }
             cts.Dispose();
         }
     }

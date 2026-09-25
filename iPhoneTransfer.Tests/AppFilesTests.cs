@@ -92,6 +92,27 @@ internal static class AppFilesTests
             children.Any(p => Path.GetFileName(p) == "_NUL.txt") && children.Any(p => Path.GetFileName(p) == "name_one_.bin"),
             "Windows reserved names, invalid characters and case collisions are safely renamed");
         Check(reads > imported.Files && writes == 0 && handles.Count == 0, "App imports stream chunks, close handles and never write to the iPhone");
+        var previewPath = Path.Combine(directory, "app-preview.bin");
+        var previewItem = listed.Single(i => i.Name == "report.pdf");
+        Call("CopyAppPreviewFile", api, null, previewItem, previewPath, CancellationToken.None);
+        Check(File.ReadAllBytes(previewPath).SequenceEqual(data) && writes == 0 && handles.Count == 0, "App previews stream exact bytes from the app document service, read-only");
+        Fails<IOException>(() => Call("CopyAppPreviewFile", api, null, previewItem, previewPath, CancellationToken.None), "Preview copies never overwrite an existing local file");
+        Fails<IOException>(() => Call("CopyAppPreviewFile", api, null, listed.Single(i => i.IsSymbolicLink), previewPath, CancellationToken.None), "App preview rejects symbolic links");
+        entries["/Documents/report.pdf"] = new(false, data, Size: 100);
+        Fails<IOException>(() => Call("CopyAppPreviewFile", api, null, previewItem, previewPath, CancellationToken.None), "App preview rejects changed file size before reading");
+        entries["/Documents/report.pdf"] = new(false, data);
+        var failedPreview = Path.Combine(directory, "failed-preview.bin");
+        failRead = true;
+        Fails<MobileDeviceException>(() => Call("CopyAppPreviewFile", api, null, previewItem, failedPreview, CancellationToken.None), "App preview propagates USB read failures");
+        failRead = false;
+        using (var previewCancel = new CancellationTokenSource())
+        {
+            afterRead = previewCancel.Cancel;
+            Fails<OperationCanceledException>(() => Call("CopyAppPreviewFile", api, null, previewItem, failedPreview, previewCancel.Token), "App preview cancels in the middle of a file");
+            afterRead = null;
+        }
+        Check(!File.Exists(failedPreview) && !Directory.GetFiles(directory, "*.partial").Any() && handles.Count == 0,
+            "Failed or canceled app previews remove temporary files and close native handles");
         var failureDir = Path.Combine(directory, "app-failures");
         entries["/Documents/report.pdf"] = new(false, data, Size: 100);
         Fails<IOException>(() => Call("ImportAppFiles", api, null, new[] { "/Documents/report.pdf" }, failureDir, null, CancellationToken.None), "Size mismatch cannot publish a completed app file");

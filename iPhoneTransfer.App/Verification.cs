@@ -47,10 +47,12 @@ public partial class MainWindow
         DeviceCombo.SelectedIndex = 0;
         RenderConnection();
         Check(RequireDevice(), "Ready device can transfer");
+        BitmapSource appFixture;
         using (var fixture = typeof(MediaVerification).Assembly.GetManifestResourceStream("iPhoneTransfer.TestFixture.heic")!)
         {
             using var buffer = new MemoryStream(); fixture.CopyTo(buffer);
             var preview = MediaPreview.DecodeImage(buffer.ToArray(), 480);
+            appFixture = preview;
             _photos.Add(new(new PhotoItem("/DCIM/IMG_0001.HEIC", "IMG_0001.HEIC", 718114, DateTime.Today)) { Thumbnail = preview });
             _photos.Add(new(new PhotoItem("/DCIM/IMG_0001.MOV", "IMG_0001.MOV", 2718114, DateTime.Today)) { Thumbnail = preview });
             _photos.Add(new(new PhotoItem("/DCIM/error.HEIC", "error.HEIC", 100, DateTime.Today)) { PreviewError = "테스트: 원본을 다시 읽어 주세요." });
@@ -70,6 +72,13 @@ public partial class MainWindow
         SetBusy(true, "테스트");
         Check(!DeviceCombo.IsEnabled && !RepairBtn.IsEnabled && !FilesToSend.AllowDrop, "Transfer locks device, repair and drop controls");
         SetBusy(false, "준비 완료");
+        var appRequests = new List<string>();
+        _appMediaLoader = (device, bundle, item, width, token) =>
+        {
+            token.ThrowIfCancellationRequested();
+            appRequests.Add(bundle + ":" + item.DevicePath);
+            return Task.FromResult(appFixture);
+        };
         Navigate(1);
         AppCombo.ItemsSource = new[] { new SharingApp("fixture.read", "파일 공유 앱") };
         AppCombo.SelectedIndex = 0;
@@ -78,14 +87,39 @@ public partial class MainWindow
         _appFiles.Add(new("/Documents/자료/문서", "문서", true, 0, DateTime.Today));
         _appFiles.Add(new("/Documents/자료/book.epub", "book.epub", false, 2_500_000, DateTime.Today));
         _appFiles.Add(new("/Documents/자료/notes.pdf", "notes.pdf", false, 128_000, DateTime.Today));
+        var appPhoto = new AppFileRow("/Documents/자료/풍경.HEIC", "풍경.HEIC", false, 718114, DateTime.Today);
+        var appVideo = new AppFileRow("/Documents/자료/촬영.MOV", "촬영.MOV", false, 2718114, DateTime.Today);
+        _appFiles.Add(appPhoto); _appFiles.Add(appVideo);
         AppFilesEmpty.Visibility = Visibility.Collapsed;
+        StartAppThumbnailLoad();
+        Check(appPhoto.Thumbnail != null && appVideo.Thumbnail != null && appRequests.Count == 2 && appRequests.All(r => r.StartsWith("fixture.read:/Documents/")),
+            "App grid loads photo and video thumbnails from the selected app, excluding folders and documents");
         AppFileList.SelectAll();
-        Check(ImportAppFilesBtn.IsEnabled && AppParentBtn.IsEnabled && AppFileList.SelectedItems.Count == 3, "App files support multi-selection and parent navigation");
+        Check(ImportAppFilesBtn.IsEnabled && AppParentBtn.IsEnabled && AppFileList.SelectedItems.Count == 5, "App files support multi-selection and parent navigation");
+        AppFileList.UnselectAll(); AppFileList.SelectedItem = appPhoto;
+        AppFileList.ScrollIntoView(appPhoto);
+        Check(AppPreviewImage.Source != null && AppLargePreviewBtn.IsEnabled && AppFileList.View == null && AppFileList.ItemTemplate != null,
+            "App grid is the default and selected HEIC has a side preview and enlarged-view action");
         await CaptureAsync("03-app-import.png");
         Width = 1000; Height = 680;
         await CaptureAsync("07-app-import-compact.png");
-        Check(AppFileList.ActualHeight >= 65, "App import list remains usable at minimum window size");
+        Check(AppFileList.ActualHeight >= 168, $"App import grid fits a full thumbnail row at minimum window size ({AppFileList.ActualHeight:0} px)");
         Width = 1180; Height = 820;
+        AppListRadio.IsChecked = true;
+        Check(AppFileList.View != null && AppFileList.SelectedItem == appPhoto && AppPreviewImage.Source != null,
+            "Switching between grid and list preserves selection and preview");
+        await CaptureAsync("08-app-list.png");
+        AppGridRadio.IsChecked = true;
+        AppFileList.SelectedItem = appVideo;
+        Check(AppPreviewCaption.Text.Contains("영상 대표 화면"), "App video preview is clearly labeled as a representative frame");
+        var stalePreview = new TaskCompletionSource<BitmapSource>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _appMediaLoader = (_, _, _, _, _) => stalePreview.Task; // Simulate a native read returning after cancellation.
+        appVideo.Thumbnail = null;
+        var loadingPreview = ShowAppPreviewAsync(appVideo);
+        Cancel_Click(this, new RoutedEventArgs());
+        stalePreview.SetResult(appFixture);
+        await loadingPreview;
+        Check(AppPreviewImage.Source == null && _appPreviewCts == null, "Canceled app preview cannot publish a late image");
         SetBusy(true, "앱 가져오기 검증");
         Check(!ImportAppFilesBtn.IsEnabled && !AppCombo.IsEnabled && !AppParentBtn.IsEnabled && !AppSendRadio.IsEnabled, "App import locks app, direction and navigation until complete");
         SetBusy(false, "준비 완료");
@@ -93,9 +127,14 @@ public partial class MainWindow
         Check(AppSendPane.Visibility == Visibility.Visible && AppReadPane.Visibility == Visibility.Collapsed, "Existing app upload remains accessible");
         await CaptureAsync("06-app-send.png");
         AppReadRadio.IsChecked = true;
+        var oldAppPreview = new TaskCompletionSource<BitmapSource>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _appMediaLoader = (_, _, _, _, _) => oldAppPreview.Task;
+        var oldAppLoad = ShowAppPreviewAsync(appVideo);
         AppCombo.ItemsSource = new[] { new SharingApp("fixture.other", "다른 앱") };
         AppCombo.SelectedIndex = 0;
-        Check(_appFiles.Count == 0 && _appDirectory == "/Documents" && !ImportAppFilesBtn.IsEnabled, "Switching apps clears old app selections and paths");
+        oldAppPreview.SetResult(appFixture); await oldAppLoad;
+        Check(_appFiles.Count == 0 && _appDirectory == "/Documents" && !ImportAppFilesBtn.IsEnabled && AppPreviewImage.Source == null,
+            "Switching apps clears old selections, paths and late previews");
         Navigate(2);
         Width = 1000; Height = 680;
         await CaptureAsync("04-compact.png");
@@ -109,6 +148,8 @@ public partial class MainWindow
         {
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             UpdateLayout();
+            if (MainTabs.SelectedIndex == 1 && AppFileList.SelectedItem != null)
+            { AppFileList.ScrollIntoView(AppFileList.SelectedItem); await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); UpdateLayout(); }
             var content = (FrameworkElement)Content;
             var bitmap = new RenderTargetBitmap((int)content.ActualWidth, (int)content.ActualHeight, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(content);
@@ -120,6 +161,49 @@ public partial class MainWindow
 
 internal static class DeviceVerification
 {
+    public static async Task RunAppMediaAsync(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var ready = IPhoneClient.ListDevices().FirstOrDefault(d => d.IsReady) ?? throw new IOException("아이폰을 연결하고 잠금을 해제하세요.");
+        var apps = await IPhoneClient.ListSharingAppsAsync(ready.Udid, ct.Token);
+        var results = new List<object>();
+        bool imageDone = false, videoDone = false;
+        int directories = 0, rejectedApps = 0;
+        foreach (var app in apps)
+        {
+            try
+            {
+                var folders = new Queue<(string Path, int Depth)>(); folders.Enqueue(("/Documents", 0));
+                for (int count = 0; count < 5 && folders.Count > 0 && !(imageDone && videoDone); count++)
+                {
+                    var folder = folders.Dequeue();
+                    var items = await IPhoneClient.ListAppFilesAsync(ready.Udid, app.BundleId, folder.Path, ct.Token); directories++;
+                    foreach (var item in items.Where(i => !i.IsDirectory && !i.IsSymbolicLink && i.Size is > 0 and < 80_000_000).OrderBy(i => i.Size))
+                    {
+                        var video = MediaPreview.IsVideo(item.Name);
+                        if (video ? videoDone : imageDone || !MediaPreview.IsImage(item.Name)) continue;
+                        var preview = await MediaPreview.LoadAppAsync(ready.Udid, app.BundleId, item, 480, ct.Token);
+                        results.Add(new { kind = video ? "video" : "image", extension = Path.GetExtension(item.Name).ToLowerInvariant(), bytes = item.Size,
+                            width = preview.PixelWidth, height = preview.PixelHeight, frozen = preview.IsFrozen });
+                        if (video) videoDone = true; else imageDone = true;
+                        if (imageDone && videoDone) break;
+                    }
+                    if (folder.Depth < 2) foreach (var child in items.Where(i => i.IsDirectory).Take(4)) folders.Enqueue((child.DevicePath, folder.Depth + 1));
+                }
+            }
+            catch (MobileDeviceException) { rejectedApps++; }
+            if (imageDone && videoDone) break;
+        }
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        await File.WriteAllTextAsync(Path.Combine(directory, "app-media-check.json"), JsonSerializer.Serialize(new
+        {
+            ready = true, appCount = apps.Count, directories, rejectedApps, previews = results,
+            note = "Read-only app document previews. No uploads or device changes; local copies removed. No filenames or device identifiers saved."
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        if (results.Count == 0) throw new IOException("검색 범위에서 검증할 사진·영상이 없었습니다.");
+    }
+
     public static async Task RunAppFilesAsync(string directory)
     {
         Directory.CreateDirectory(directory);

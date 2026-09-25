@@ -36,7 +36,7 @@ public partial class MainWindow
         {
             if (_actionRunning) { e.Cancel = true; ActionResult.Text = "설치 또는 복구가 진행 중입니다. 완료될 때까지 기다려 주세요."; Navigate(2); return; }
             if (_busy) { e.Cancel = true; _opCts?.Cancel(); StatusText.Text = "작업을 취소 중입니다. 정리가 끝난 후 창을 닫아 주세요."; return; }
-            _connectionTimer.Stop(); _lifetime.Cancel(); _thumbCts?.Cancel(); _previewCts?.Cancel();
+            _connectionTimer.Stop(); _lifetime.Cancel(); _thumbCts?.Cancel(); _previewCts?.Cancel(); CancelAppMedia();
         };
     }
 
@@ -45,7 +45,15 @@ public partial class MainWindow
     internal void OpenAppFiles() => Navigate(1);
     private void Navigate(int index)
     {
+        if (index != 1) CancelAppMedia();
+        if (index != 0) { _thumbCts?.Cancel(); _previewCts?.Cancel(); }
         MainTabs.SelectedIndex = index;
+        ConnectionDetail.Visibility = index == 1 ? Visibility.Collapsed : Visibility.Visible;
+        ConnectionCard.Padding = new Thickness(index == 1 ? 8 : 18);
+        ConnectionCard.Margin = new Thickness(0, 0, 0, index == 1 ? 10 : 18);
+        ConnectionHelpBtn.Visibility = PageSubtitle.Visibility = index == 1 ? Visibility.Collapsed : Visibility.Visible;
+        PageHeader.Margin = new Thickness(0, 0, 0, index == 1 ? 12 : 20);
+        RefreshDevicesBtn.Margin = new Thickness(0, 0, 0, index == 1 ? 0 : 8);
         PageTitle.Text = new[] { "사진 가져오기", "앱 파일", "연결 센터" }[index];
         PageSubtitle.Text = new[] { "아이폰에 담긴 순간을, PC에서도 오래도록.", "앱의 파일을 PC로 가져오거나, PC 파일을 앱으로 보내세요.", "연결부터 드라이버 설치까지, 차근차근." }[index];
         var buttons = new[] { PhotosNav, SendNav, ConnectionNav };
@@ -54,6 +62,7 @@ public partial class MainWindow
             buttons[i].Background = (Brush)new BrushConverter().ConvertFromString(i == index ? "#2864EA" : "Transparent")!;
             buttons[i].Foreground = (Brush)new BrushConverter().ConvertFromString(i == index ? "White" : "#BFCEE3")!;
         }
+        if (index == 1) StartAppThumbnailLoad();
     }
 
     private async Task RefreshConnectionAsync(bool forceHost)

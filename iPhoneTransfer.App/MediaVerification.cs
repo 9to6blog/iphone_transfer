@@ -27,6 +27,11 @@ internal static class MediaVerification
             Check(format == MagickFormat.Heic ? bitmap.PixelWidth == 160 && bitmap.PixelHeight == 107 : bitmap.PixelWidth == 80 && bitmap.PixelHeight == 160,
                 $"{format}: thumbnail decodes with correct aspect ratio");
             Check(bitmap.IsFrozen, $"{format}: preview is safe across threads");
+            string? copiedPath = null;
+            var appBitmap = await MediaPreview.LoadFileAsync("app." + format, 160, async (path, token) =>
+            { copiedPath = path; await File.WriteAllBytesAsync(path, data, token); }, ct.Token);
+            Check(appBitmap.PixelWidth == bitmap.PixelWidth && appBitmap.IsFrozen && !Directory.Exists(Path.GetDirectoryName(copiedPath)!),
+                $"{format}: app preview copy/decode pipeline cleans temporary files");
             var converted = MediaPreview.ConvertToJpeg(data);
             Check(converted is { Length: > 0 } && converted[0] == 0xff && converted[1] == 0xd8, $"{format}: JPEG conversion uses bundled decoder");
             if (format == MagickFormat.Heic)
@@ -59,7 +64,20 @@ internal static class MediaVerification
             checks.Add(codec + ": generated synthetic MOV fixture");
             var bitmap = await MediaPreview.VideoFrameAsync(path, 160, ct.Token);
             Check(bitmap.PixelWidth == 80 && bitmap.PixelHeight == 160, codec + ": MOV video thumbnail decodes without Windows codecs");
+            string? copiedVideo = null;
+            var appFrame = await MediaPreview.LoadFileAsync("app.MOV", 160, (destination, token) =>
+            { token.ThrowIfCancellationRequested(); copiedVideo = destination; File.Copy(path, destination); return Task.CompletedTask; }, ct.Token);
+            Check(appFrame.PixelWidth == 80 && appFrame.PixelHeight == 160 && !Directory.Exists(Path.GetDirectoryName(copiedVideo)!),
+                codec + ": app video preview pipeline decodes and removes its temporary movie");
         }
+        string? failedPath = null;
+        try
+        {
+            await MediaPreview.LoadFileAsync("broken.HEIC", 160, (path, _) =>
+            { failedPath = path; File.WriteAllBytes(path, [1, 2, 3]); return Task.CompletedTask; }, ct.Token);
+            throw new Exception("Corrupt preview was accepted");
+        }
+        catch (MagickException) { Check(!Directory.Exists(Path.GetDirectoryName(failedPath)!), "Failed app image decode removes its temporary copy"); }
         using (var canceled = new CancellationTokenSource())
         {
             canceled.Cancel();

@@ -5,7 +5,7 @@
 ; ============================================================
 #define AppName "iPhone 사진 전송기"
 #define AppExe  "iPhoneTransfer.exe"
-#define AppVer  "2.2.0"
+#define AppVer  "2.3.0"
 #ifndef AppSource
   #define AppSource "dist\iPhoneTransfer"
 #endif

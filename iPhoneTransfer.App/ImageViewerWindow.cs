@@ -17,8 +17,7 @@ namespace iPhoneTransfer.App;
 /// </summary>
 public sealed class ImageViewerWindow : Window
 {
-    private readonly string _udid;
-    private readonly PhotoItem _item;
+    private readonly Func<CancellationToken, Task<BitmapSource>> _loadImage;
     private readonly Image _image = new() { Stretch = Stretch.Uniform };
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TranslateTransform _translate = new(0, 0);
@@ -37,11 +36,13 @@ public sealed class ImageViewerWindow : Window
     private bool _dragging;
 
     public ImageViewerWindow(string udid, PhotoItem item)
-    {
-        _udid = udid;
-        _item = item;
+        : this(item.FileName, ct => MediaPreview.LoadAsync(udid, item, MediaPreview.IsVideo(item.FileName) ? 1920 : 0, ct)) { }
 
-        Title = $"{item.FileName} — {(MediaPreview.IsVideo(item.FileName) ? "영상 대표 프레임" : "크게보기")} (휠=확대/축소, 드래그=이동, ESC=닫기)";
+    internal ImageViewerWindow(string name, Func<CancellationToken, Task<BitmapSource>> loadImage)
+    {
+        _loadImage = loadImage;
+
+        Title = $"{name} — {(MediaPreview.IsVideo(name) ? "영상 대표 프레임" : "크게보기")} (휠=확대/축소, 드래그=이동, ESC=닫기)";
         Width = 1000;
         Height = 720;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -111,7 +112,7 @@ public sealed class ImageViewerWindow : Window
         _cts = new CancellationTokenSource();
         try
         {
-            var bmp = await MediaPreview.LoadAsync(_udid, _item, MediaPreview.IsVideo(_item.FileName) ? 1920 : 0, _cts.Token);
+            var bmp = await _loadImage(_cts.Token);
             _cts.Token.ThrowIfCancellationRequested();
             _image.Source = bmp;
             _msg.Visibility = Visibility.Collapsed;

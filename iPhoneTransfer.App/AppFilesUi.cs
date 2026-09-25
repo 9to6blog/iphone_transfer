@@ -9,7 +9,7 @@ namespace iPhoneTransfer.App;
 
 public partial class MainWindow
 {
-    private readonly ObservableCollection<AppFileItem> _appFiles = new();
+    private readonly ObservableCollection<AppFileRow> _appFiles = new();
     private string _appDirectory = "/Documents";
     private string? _appFilesBundle, _appFilesDevice, _appImportFolder;
 
@@ -18,6 +18,9 @@ public partial class MainWindow
         if (AppReadPane == null || AppSendPane == null) return;
         AppReadPane.Visibility = AppReadRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         AppSendPane.Visibility = AppReadRadio.IsChecked == true ? Visibility.Collapsed : Visibility.Visible;
+        if (AppGridRadio != null) AppGridRadio.Visibility = AppListRadio.Visibility = AppReadPane.Visibility;
+        CancelAppMedia();
+        if (AppReadRadio.IsChecked == true) StartAppThumbnailLoad();
     }
 
     private void AppCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => ResetAppBrowser();
@@ -25,7 +28,9 @@ public partial class MainWindow
     private void ResetAppBrowser()
     {
         if (AppFileList == null) return;
+        CancelAppMedia();
         _appFiles.Clear(); _appDirectory = "/Documents"; _appFilesBundle = null; _appFilesDevice = null;
+        ClearAppPreview();
         AppFolderText.Text = _appDirectory;
         AppFilesEmpty.Text = "앱을 선택하고 ‘앱 파일 불러오기’를 누르세요.";
         AppFilesEmpty.Visibility = Visibility.Visible;
@@ -42,6 +47,7 @@ public partial class MainWindow
         AppParentBtn.IsEnabled = !_busy && validList && _appDirectory != "/Documents";
         AppSelectAllBtn.IsEnabled = AppClearSelectionBtn.IsEnabled = !_busy && validList && _appFiles.Count > 0;
         ImportAppFilesBtn.IsEnabled = !_busy && validList && AppFileList.SelectedItems.Count > 0;
+        AppLargePreviewBtn.IsEnabled = !_busy && validList && AppFileList.SelectedItems.Count == 1 && AppFileList.SelectedItem is AppFileRow { CanPreview: true };
         AppSelectionText.Text = $"{_appFiles.Count}개 항목 · 선택 {AppFileList.SelectedItems.Count}개";
     }
 
@@ -52,16 +58,24 @@ public partial class MainWindow
     }
     private void AppSelectAll_Click(object sender, RoutedEventArgs e) { if (!_busy) AppFileList.SelectAll(); }
     private void AppClearSelection_Click(object sender, RoutedEventArgs e) { if (!_busy) AppFileList.UnselectAll(); }
-    private void AppFileList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateAppBrowserButtons();
+    private async void AppFileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateAppBrowserButtons();
+        if (AppFileList.SelectedItems.Count == 1 && AppFileList.SelectedItem is AppFileRow row) await ShowAppPreviewAsync(row);
+        else { CancelAppSelectedPreview(); ClearAppPreview(); StartAppThumbnailLoad(); }
+    }
     private async void AppFileList_DoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (ItemsControl.ContainerFromElement(AppFileList, e.OriginalSource as DependencyObject) is ListViewItem { DataContext: AppFileItem { IsDirectory: true } folder })
-            await LoadAppDirectoryAsync(folder.DevicePath);
+        if (ItemsControl.ContainerFromElement(AppFileList, e.OriginalSource as DependencyObject) is ListViewItem { DataContext: AppFileRow row })
+        {
+            if (row.IsDirectory) await LoadAppDirectoryAsync(row.DevicePath);
+            else OpenAppLargeView(row);
+        }
     }
     private async void AppFileList_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && AppFileList.SelectedItem is AppFileItem { IsDirectory: true } folder)
-        { e.Handled = true; await LoadAppDirectoryAsync(folder.DevicePath); }
+        if (e.Key == Key.Enter && AppFileList.SelectedItem is AppFileRow row)
+        { e.Handled = true; if (row.IsDirectory) await LoadAppDirectoryAsync(row.DevicePath); else OpenAppLargeView(row); }
         else if (e.Key == Key.Back && _appDirectory != "/Documents")
         { e.Handled = true; await LoadAppDirectoryAsync(_appDirectory[.._appDirectory.LastIndexOf('/')]); }
     }
@@ -77,7 +91,7 @@ public partial class MainWindow
             var items = await IPhoneClient.ListAppFilesAsync(device, app.BundleId, directory, ct);
             ct.ThrowIfCancellationRequested();
             _appFiles.Clear();
-            foreach (var item in items) _appFiles.Add(item);
+            foreach (var item in items) _appFiles.Add(new(item));
             _appDirectory = directory; _appFilesBundle = app.BundleId; _appFilesDevice = device;
             AppFolderText.Text = directory;
             AppFilesEmpty.Text = "이 폴더는 비어 있습니다.";
@@ -86,14 +100,14 @@ public partial class MainWindow
         }
         catch (OperationCanceledException) { SetBusy(false, "앱 파일 조회 취소됨"); }
         catch (Exception ex) { SetBusy(false, "앱 파일 조회 실패"); ShowError(ex); }
-        finally { EndOp(); }
+        finally { EndOp(); StartAppThumbnailLoad(); }
     }
 
     private async void ImportAppFiles_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || !RequireDevice() || AppCombo.SelectedItem is not SharingApp app ||
             app.BundleId != _appFilesBundle || CurrentDevice!.Udid != _appFilesDevice) return;
-        var selected = AppFileList.SelectedItems.Cast<AppFileItem>().ToArray();
+        var selected = AppFileList.SelectedItems.Cast<AppFileRow>().ToArray();
         if (selected.Length == 0) return;
         var dialog = new OpenFolderDialog { Title = "앱 파일을 저장할 PC 폴더 선택" };
         if (_appImportFolder != null) dialog.InitialDirectory = _appImportFolder;
