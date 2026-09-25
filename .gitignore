@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+/dist/
+/work/
+/.vs/
+*.user
+*.suo
+*.log
+*.partial
+*.env
+.env*
+/iPhoneTransfer-dist.zip
+/iPhoneTransfer-Setup.exe
+/vendor/ffmpeg/ffmpeg.exe

@@ -1,0 +1,247 @@
+<Window x:Class="iPhoneTransfer.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="iPhoneTransfer · 사진과 파일 전송" Width="1180" Height="820" MinWidth="1000" MinHeight="680" WindowStartupLocation="CenterScreen" FontFamily="Segoe UI, Malgun Gothic" FontSize="13" Foreground="#14243A" Background="#F3F6FB" UseLayoutRounding="True" SnapsToDevicePixels="True" Icon="appicon.ico">
+
+ <Window.Resources>
+  <SolidColorBrush x:Key="Ink" Color="#14243A"/>
+  <Style TargetType="Button">
+   <Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#283A53"/>
+   <Setter Property="BorderBrush" Value="#DCE3ED"/><Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="Padding" Value="14,9"/><Setter Property="Margin" Value="0,0,8,6"/>
+   <Setter Property="Cursor" Value="Hand"/><Setter Property="FontWeight" Value="SemiBold"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="Chrome" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+    </Border>
+    <ControlTemplate.Triggers>
+     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.82"/></Trigger>
+     <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.65"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#4285FF"/><Setter TargetName="Chrome" Property="BorderThickness" Value="2"/></Trigger>
+     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.38"/></Trigger>
+    </ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="#2864EA"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="#2864EA"/></Style>
+  <Style x:Key="NavButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="#BFCEE3"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="14,13"/><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="HorizontalContentAlignment" Value="Left"/></Style>
+  <Style TargetType="ComboBox">
+   <Setter Property="MinHeight" Value="36"/><Setter Property="FontSize" Value="13"/><Setter Property="Foreground" Value="#283A53"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox"><Grid>
+    <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+     <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border x:Name="Box" Background="#F7F9FD" BorderBrush="#DCE3ED" BorderThickness="1" CornerRadius="7"><Grid><Path Data="M 0 0 L 4 4 L 8 0" Stroke="#64748B" StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#2864EA"/></Trigger></ControlTemplate.Triggers></ControlTemplate></ToggleButton.Template>
+    </ToggleButton>
+    <ContentPresenter Margin="12,6,34,6" VerticalAlignment="Center" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+    <TextBlock x:Name="EmptyChoice" Visibility="Collapsed" Text="연결된 항목 없음" Foreground="#94A3B8" Margin="12,6,34,6" VerticalAlignment="Center" IsHitTestVisible="False"/>
+    <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide"><Border Background="White" BorderBrush="#DCE3ED" BorderThickness="1" CornerRadius="7" MinWidth="{TemplateBinding ActualWidth}" Margin="0,4,0,0" Padding="4"><ScrollViewer MaxHeight="250"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer></Border></Popup>
+   </Grid><ControlTemplate.Triggers><Trigger Property="HasItems" Value="False"><Setter TargetName="EmptyChoice" Property="Visibility" Value="Visible"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="ListView"><Setter Property="BorderBrush" Value="#E2E8F0"/><Setter Property="Background" Value="White"/><Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/></Style>
+  <Style TargetType="ListViewItem"><Setter Property="Padding" Value="4"/><EventSetter Event="PreviewMouseLeftButtonDown" Handler="Item_PreviewMouseLeftButtonDown"/></Style>
+  <Style TargetType="TabControl"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl"><ContentPresenter ContentSource="SelectedContent"/></ControlTemplate></Setter.Value></Setter></Style>
+  <Style x:Key="Step" TargetType="Border"><Setter Property="Background" Value="#F5F7FB"/><Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="16"/><Setter Property="Margin" Value="0,0,0,8"/></Style>
+ </Window.Resources>
+
+ <Grid Background="#F3F6FB">
+  <Grid.ColumnDefinitions><ColumnDefinition Width="202"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+  <Border Background="#14243A"><DockPanel Margin="20,28,20,24">
+   <StackPanel DockPanel.Dock="Top" Margin="0,0,0,34"><Border Background="#2864EA" CornerRadius="13" Width="44" Height="44" HorizontalAlignment="Left"><TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="iPhoneTransfer" Foreground="White" FontSize="19" FontWeight="Bold" Margin="0,16,0,6"/><TextBlock Text="사진과 파일, 편안하게." Foreground="#95A8C3" FontSize="12"/></StackPanel>
+   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.0" FontSize="10" Foreground="#738DAE"/></StackPanel>
+   <StackPanel><TextBlock Text="WORKSPACE" Foreground="#738DAE" FontSize="10" Margin="10,0,0,14"/>
+    <Button x:Name="PhotosNav" Style="{StaticResource NavButton}" Content="사진 가져오기" Tag="0" Click="Navigate_Click"/>
+    <Button x:Name="SendNav" Style="{StaticResource NavButton}" Content="앱으로 보내기" Tag="1" Click="Navigate_Click"/>
+    <Button x:Name="ConnectionNav" Style="{StaticResource NavButton}" Content="연결 센터" Tag="2" Click="Navigate_Click"/>
+   </StackPanel>
+  </DockPanel></Border>
+  <Grid Grid.Column="1" Margin="26,24,26,20">
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <Grid Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <StackPanel><TextBlock x:Name="PageTitle" Text="사진 가져오기" FontSize="27" FontWeight="Bold"/><TextBlock x:Name="PageSubtitle" Text="아이폰에 담긴 순간을, PC에서도 오래도록." Foreground="#718096" Margin="0,7,0,0"/></StackPanel>
+    <Border Grid.Column="1" Background="#E8EEF8" CornerRadius="14" Padding="12,6" VerticalAlignment="Top"><TextBlock Text="Windows 10 · 11 / x64" FontSize="11" Foreground="#536A8B"/></Border>
+   </Grid>
+   <Border Grid.Row="1" Background="White" BorderBrush="#DEE6F0" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,0,0,18">
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <Border Background="#EDF3FF" CornerRadius="12" Width="40" Height="48" VerticalAlignment="Top"><TextBlock Text="&#xE8EA;" FontFamily="Segoe MDL2 Assets" Foreground="#2864EA" FontSize="24" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+     <StackPanel Grid.Column="1"><TextBlock x:Name="ConnectionTitle" Text="아이폰을 찾고 있습니다" FontSize="16" FontWeight="Bold"/><TextBlock x:Name="ConnectionDetail" Text="USB 케이블을 연결하고 아이폰의 잠금을 해제하세요." TextWrapping="Wrap" Foreground="#64748B" Margin="0,6,12,10"/><ComboBox x:Name="DeviceCombo" MaxWidth="450" HorizontalAlignment="Stretch" SelectionChanged="DeviceCombo_SelectionChanged"/></StackPanel>
+     <StackPanel Grid.Column="2"><Button x:Name="RefreshDevicesBtn" Content="다시 검색" Click="RefreshDevices_Click" Margin="0,0,0,8"/><Button Content="연결 도움받기" Tag="2" Click="Navigate_Click" Margin="0"/></StackPanel>
+    </Grid>
+   </Border>
+   <Border Grid.Row="2" Background="White" CornerRadius="14" BorderBrush="#DEE6F0" BorderThickness="1" Padding="18"><TabControl x:Name="MainTabs">
+            <!-- 탭 1: 가져오기 -->
+            <TabItem Header="  📥 사진 가져오기 (iPhone → PC)  ">
+                <Grid Margin="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button x:Name="LoadPhotosBtn" Content="사진 목록 불러오기" Click="LoadPhotos_Click"/>
+                        <Button x:Name="SelectAllBtn" Content="모두 선택" Click="SelectAllPhotos_Click"/>
+                        <Button x:Name="UnselectAllBtn" Content="선택 해제" Click="UnselectAllPhotos_Click"/>
+                        <Button x:Name="HelpBtn" Content="사진 도움말" Click="Help_Click"/>
+                        <TextBlock x:Name="PhotoCountText" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="#6B7280"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="16,0,0,0">
+                            <TextBlock Text="보기:" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#6B7280"/>
+                            <RadioButton x:Name="ViewListRadio" GroupName="view" Content="목록" VerticalAlignment="Center"
+                                         Margin="0,0,10,0" Checked="ViewList_Checked"/>
+                            <RadioButton x:Name="ViewGridRadio" GroupName="view" Content="그리드" VerticalAlignment="Center"
+                                         Checked="ViewGrid_Checked"/>
+                        </StackPanel>
+                    </WrapPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="250"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 왼쪽: 목록 보기 / 그리드 보기 (Visibility로 토글) -->
+                        <Grid Grid.Column="0">
+<StackPanel x:Name="PhotoEmpty" Panel.ZIndex="2" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="&#xE91B;" FontFamily="Segoe MDL2 Assets" FontSize="48" Foreground="#C1CCDC" HorizontalAlignment="Center"/><TextBlock Text="소중한 순간을 PC에 보관하세요" FontSize="18" FontWeight="SemiBold" Margin="0,20,0,8"/><TextBlock Text="아이폰 연결 후 ‘사진 목록 불러오기’를 누르세요." Foreground="#64748B" TextAlignment="Center"/></StackPanel>
+                            <!-- 목록 보기 -->
+                            <ListView x:Name="PhotoList" SelectionMode="Single" Visibility="Collapsed">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Width="40">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"/>
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="파일명" Width="190" DisplayMemberBinding="{Binding FileName}"/>
+                                        <GridViewColumn Header="날짜" Width="130" DisplayMemberBinding="{Binding DateText}"/>
+                                        <GridViewColumn Header="크기" Width="85" DisplayMemberBinding="{Binding SizeText}"/>
+                                        <GridViewColumn Header="경로" Width="200" DisplayMemberBinding="{Binding DevicePath}"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+
+                            <!-- 그리드(썸네일) 보기 -->
+                            <ListView x:Name="PhotoGrid"
+                                      SelectionMode="Single"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      BorderThickness="0">
+                                <ListView.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ListView.ItemsPanel>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="142" Height="142" Margin="4" Background="White"
+                                                BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10"
+                                                ToolTip="{Binding FileName}">
+                                            <Grid>
+                                                <TextBlock Text="{Binding Placeholder}" TextAlignment="Center"
+                                                           TextWrapping="Wrap" FontSize="22" Foreground="#C4C7CC"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                                <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                          HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5"
+                                                          Background="White"/>
+                                                <Border VerticalAlignment="Bottom" Background="#A6000000">
+                                                    <TextBlock Text="{Binding DateText}" Foreground="White"
+                                                               FontSize="10" Margin="5,2"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+
+                        <!-- 오른쪽: 상시 미리보기 패널 (목록·그리드 공통) -->
+                        <Border Grid.Column="1" Margin="8,0,0,0" BorderBrush="#E5E7EB" BorderThickness="1"
+                                CornerRadius="12" Background="#F5F7FA">
+                            <Grid Margin="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="사진 미리보기" FontWeight="SemiBold" Foreground="#6B7280" Margin="0,0,0,6"/>
+                                <Grid Grid.Row="1">
+                                    <Image x:Name="PreviewImage" Stretch="Uniform"/>
+                                    <TextBlock x:Name="PreviewMsg" Text="사진을 선택하면&#10;여기에 크게 표시됩니다.&#10;&#10;더블클릭으로 원본 보기"
+                                               TextAlignment="Center" TextWrapping="Wrap"
+                                               Foreground="#9CA3AF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                                <TextBlock x:Name="PreviewCaption" Grid.Row="2" Margin="0,6,0,0"
+                                           TextWrapping="Wrap" Foreground="#374151" FontSize="12"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="ImportBtn" Content="선택한 사진 가져오기" Style="{StaticResource PrimaryButton}"
+                                MinWidth="190" Click="Import_Click" FontWeight="SemiBold"/>
+                        <CheckBox x:Name="ConvertJpegCheck" Content="JPG로 변환" VerticalAlignment="Center" Margin="4,0,12,0" ToolTip="기본은 원본 보관입니다. 변환 실패 시 원본으로 저장합니다."/><TextBlock x:Name="ImportDestText" VerticalAlignment="Center" Foreground="#6B7280"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- 탭 2: 보내기 -->
+            <TabItem Header="  📤 앱으로 보내기 (PC → iPhone)  ">
+                <Grid Margin="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button x:Name="LoadAppsBtn" Content="파일 공유 앱 목록 불러오기" MinWidth="200" Click="LoadApps_Click"/>
+                        <TextBlock x:Name="AppHintText" VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="#6B7280" Text="(파일 공유를 지원하는 앱만 표시됩니다)"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="보낼 앱:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="AppCombo" Width="420" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Border Grid.Row="2" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10">
+                        <Grid>
+                            <TextBlock x:Name="DropHint"
+                                       Text="여기로 파일을 끌어다 놓거나, 아래 '파일 추가' 버튼을 누르세요"
+                                       Foreground="#9CA3AF" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsHitTestVisible="False"/>
+                            <ListBox x:Name="FilesToSend" AllowDrop="True" Drop="FilesToSend_Drop"
+                                     Background="Transparent" BorderThickness="0"/>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="AddFilesBtn" Content="파일 추가" Click="AddFiles_Click"/>
+                        <Button x:Name="ClearFilesBtn" Content="목록 비우기" Click="ClearFiles_Click"/>
+                        <Button x:Name="SendBtn" Content="선택한 앱으로 보내기" Style="{StaticResource PrimaryButton}"
+                                MinWidth="200" Click="Send_Click" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+ <TabItem Header="연결 센터"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+  <Grid Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel><TextBlock Text="연결 상태를 한눈에" FontSize="22" FontWeight="Bold"/><TextBlock Text="진단 결과에 맞는 조치를 선택하세요. 완료 후 자동으로 다시 확인합니다." Foreground="#64748B" Margin="0,6,0,0" TextWrapping="Wrap"/></StackPanel>
+   <Button x:Name="DiagnoseBtn" Grid.Column="1" Content="다시 진단" Click="Diagnose_Click"/>
+  </Grid>
+  <Border Style="{StaticResource Step}"><StackPanel><TextBlock Text="01   Windows 환경" FontWeight="Bold"/><TextBlock x:Name="WindowsCheck" Text="확인 중…" Foreground="#64748B" Margin="0,6,0,0" TextWrapping="Wrap"/></StackPanel></Border>
+  <Border Style="{StaticResource Step}"><StackPanel><TextBlock Text="02   Apple 드라이버 및 서비스" FontWeight="Bold"/><TextBlock x:Name="DriverCheck" Text="확인 중…" Foreground="#64748B" Margin="0,6,0,10" TextWrapping="Wrap"/><WrapPanel>
+   <Button x:Name="InstallAppleBtn" Content="Apple Devices 설치" Style="{StaticResource PrimaryButton}" Click="InstallApple_Click"/>
+   <Button x:Name="RepairBtn" Content="드라이버 · 서비스 복구" Click="Repair_Click"/>
+   <Button x:Name="InstallITunesBtn" Content="대체 설치: iTunes" Click="InstallITunes_Click"/>
+  </WrapPanel><TextBlock Text="설치에는 인터넷, 드라이버 복구에는 Windows 관리자 승인이 필요합니다." Foreground="#64748B" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border>
+  <Border Style="{StaticResource Step}"><StackPanel><TextBlock Text="03   USB 연결" FontWeight="Bold"/><TextBlock x:Name="UsbCheck" Text="확인 중…" Foreground="#64748B" Margin="0,6,0,0" TextWrapping="Wrap"/></StackPanel></Border>
+  <Border Style="{StaticResource Step}"><StackPanel><TextBlock Text="04   아이폰 잠금 해제 및 신뢰" FontWeight="Bold"/><TextBlock x:Name="TrustCheck" Text="아이폰을 잠금 해제하고 ‘이 컴퓨터를 신뢰’를 선택하세요." Foreground="#64748B" Margin="0,6,0,0" TextWrapping="Wrap"/></StackPanel></Border>
+  <TextBlock x:Name="ActionResult" Foreground="#285DC1" TextWrapping="Wrap" Margin="0,8,0,12"/>
+  <WrapPanel><Button Content="Windows 업데이트" Click="WindowsUpdate_Click"/><Button Content="장치 관리자" Click="DeviceManager_Click"/><Button Content="Apple 연결 도움말" Click="AppleHelp_Click"/><Button Content="진단 보고서 저장" Click="SaveDiagnostics_Click"/></WrapPanel>
+ </StackPanel></ScrollViewer></TabItem>
+</TabControl></Border>
+   <Grid Grid.Row="3" Margin="0,16,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <StackPanel><TextBlock x:Name="StatusText" Text="연결 준비 중" Foreground="#52647C" TextTrimming="CharacterEllipsis" Margin="0,0,12,8"/><ProgressBar x:Name="Progress" Height="5" Minimum="0" Maximum="100" Foreground="#2864EA" Background="#E2E8F0" BorderThickness="0"/></StackPanel>
+    <Button x:Name="CancelBtn" Grid.Column="1" Content="작업 취소" IsEnabled="False" Click="Cancel_Click" Margin="16,0,0,0"/>
+   </Grid>
+  </Grid>
+ </Grid>
+</Window>

@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iPhoneTransfer.Core", "iPhoneTransfer.Core\iPhoneTransfer.Core.csproj", "{99A52C0A-DAD5-4377-8C7F-9EEEF8EB8BC1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iPhoneTransfer.App", "iPhoneTransfer.App\iPhoneTransfer.App.csproj", "{37241517-5DDB-4DB7-A076-21E9BBC98D39}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iPhoneTransfer.Tests", "iPhoneTransfer.Tests\iPhoneTransfer.Tests.csproj", "{3EB33227-7F75-4619-B06B-05F04D8F9BC5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{99A52C0A-DAD5-4377-8C7F-9EEEF8EB8BC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{99A52C0A-DAD5-4377-8C7F-9EEEF8EB8BC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{99A52C0A-DAD5-4377-8C7F-9EEEF8EB8BC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{99A52C0A-DAD5-4377-8C7F-9EEEF8EB8BC1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37241517-5DDB-4DB7-A076-21E9BBC98D39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37241517-5DDB-4DB7-A076-21E9BBC98D39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37241517-5DDB-4DB7-A076-21E9BBC98D39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37241517-5DDB-4DB7-A076-21E9BBC98D39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3EB33227-7F75-4619-B06B-05F04D8F9BC5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3EB33227-7F75-4619-B06B-05F04D8F9BC5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3EB33227-7F75-4619-B06B-05F04D8F9BC5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3EB33227-7F75-4619-B06B-05F04D8F9BC5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
