@@ -27,12 +27,15 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        if (e.Args.Length == 2 && e.Args[0] is "--ui-check" or "--device-check" or "--connection-check" or "--media-check")
+        if (e.Args.Length == 2 && e.Args[0] is "--ui-check" or "--device-check" or "--connection-check" or "--media-check" or "--app-files-check")
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
             {
+                System.IO.Directory.CreateDirectory(e.Args[1]);
+                System.IO.File.Delete(System.IO.Path.Combine(e.Args[1], "failure.txt"));
                 if (e.Args[0] == "--media-check") await MediaVerification.RunAsync(e.Args[1]);
+                else if (e.Args[0] == "--app-files-check") await DeviceVerification.RunAppFilesAsync(e.Args[1]);
                 else if (e.Args[0] == "--device-check") await DeviceVerification.RunAsync(e.Args[1]);
                 else
                 {
@@ -70,6 +73,7 @@ public partial class App : Application
         }
         var window = new MainWindow();
         if (e.Args.Contains("--connection")) window.OpenConnectionCenter();
+        if (e.Args.Contains("--apps")) window.OpenAppFiles();
         MainWindow = window;
         _show = new EventWaitHandle(false, EventResetMode.AutoReset, AutoLaunch.ShowEvent);
         _showWait = ThreadPool.RegisterWaitForSingleObject(_show, (_, _) => Dispatcher.BeginInvoke(() =>

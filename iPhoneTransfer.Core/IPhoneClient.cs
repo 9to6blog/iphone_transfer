@@ -23,7 +23,7 @@ namespace iPhoneTransfer.Core;
 /// - PC → 아이폰: 파일 공유 지원 앱 목록 조회 후, 선택한 앱의 Documents 폴더로 전송
 /// 모든 공개 메서드는 백그라운드 스레드에서 동작하도록 Task 로 감싼다.
 /// </summary>
-public static class IPhoneClient
+public static partial class IPhoneClient
 {
     private const string Label = "iPhoneTransfer";
 

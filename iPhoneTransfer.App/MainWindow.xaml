@@ -43,10 +43,10 @@
   <Grid.ColumnDefinitions><ColumnDefinition Width="202"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
   <Border Background="#14243A"><DockPanel Margin="20,28,20,24">
    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,34"><Border Background="#2864EA" CornerRadius="13" Width="44" Height="44" HorizontalAlignment="Left"><TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="iPhoneTransfer" Foreground="White" FontSize="19" FontWeight="Bold" Margin="0,16,0,6"/><TextBlock Text="사진과 파일, 편안하게." Foreground="#95A8C3" FontSize="12"/></StackPanel>
-   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.1" FontSize="10" Foreground="#738DAE"/></StackPanel>
+   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.2" FontSize="10" Foreground="#738DAE"/></StackPanel>
    <StackPanel><TextBlock Text="WORKSPACE" Foreground="#738DAE" FontSize="10" Margin="10,0,0,14"/>
     <Button x:Name="PhotosNav" Style="{StaticResource NavButton}" Content="사진 가져오기" Tag="0" Click="Navigate_Click"/>
-    <Button x:Name="SendNav" Style="{StaticResource NavButton}" Content="앱으로 보내기" Tag="1" Click="Navigate_Click"/>
+    <Button x:Name="SendNav" Style="{StaticResource NavButton}" Content="앱 파일" Tag="1" Click="Navigate_Click"/>
     <Button x:Name="ConnectionNav" Style="{StaticResource NavButton}" Content="연결 센터" Tag="2" Click="Navigate_Click"/>
    </StackPanel>
   </DockPanel></Border>
@@ -181,44 +181,69 @@
                 </Grid>
             </TabItem>
 
-            <!-- 탭 2: 보내기 -->
-            <TabItem Header="  📤 앱으로 보내기 (PC → iPhone)  ">
+            <!-- 탭 2: 앱 파일 가져오기 / 보내기 -->
+            <TabItem Header="앱 파일">
                 <Grid Margin="0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <Button x:Name="LoadAppsBtn" Content="파일 공유 앱 목록 불러오기" MinWidth="200" Click="LoadApps_Click"/>
-                        <TextBlock x:Name="AppHintText" VerticalAlignment="Center" Margin="6,0,0,0"
-                                   Foreground="#6B7280" Text="(파일 공유를 지원하는 앱만 표시됩니다)"/>
-                    </StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Button x:Name="LoadAppsBtn" Content="파일 공유 앱 목록 불러오기" MinWidth="200" Click="LoadApps_Click" ToolTip="아이폰에서 파일 공유를 지원하는 앱만 표시됩니다."/>
+                        <ComboBox x:Name="AppCombo" Grid.Column="1" Margin="0,0,0,6" VerticalAlignment="Center" ToolTip="가져오거나 보낼 앱 선택" SelectionChanged="AppCombo_SelectionChanged"/>
+                    </Grid>
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="보낼 앱:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <ComboBox x:Name="AppCombo" Width="420" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <Border Grid.Row="2" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10">
-                        <Grid>
+                    <Grid Grid.Row="1">
+                      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                      <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                        <RadioButton x:Name="AppReadRadio" Content="앱에서 가져오기" GroupName="AppDirection" IsChecked="True" Checked="AppDirection_Checked" Margin="0,0,24,0" FontWeight="SemiBold"/>
+                        <RadioButton x:Name="AppSendRadio" Content="앱으로 보내기" GroupName="AppDirection" Checked="AppDirection_Checked"/>
+                      </StackPanel>
+                      <Grid x:Name="AppReadPane" Grid.Row="1">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <WrapPanel>
+                          <Button x:Name="LoadAppFilesBtn" Content="앱 파일 불러오기" Click="LoadAppFiles_Click"/>
+                          <Button x:Name="AppParentBtn" Content="상위 폴더" Click="AppParent_Click" IsEnabled="False"/>
+                          <Button x:Name="AppSelectAllBtn" Content="모두 선택" Click="AppSelectAll_Click"/>
+                          <Button x:Name="AppClearSelectionBtn" Content="선택 해제" Click="AppClearSelection_Click"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="AppFolderText" Grid.Row="1" Text="/Documents" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="0,0,0,4"/>
+                        <Grid Grid.Row="2">
+                          <ListView x:Name="AppFileList" SelectionMode="Extended" SelectionChanged="AppFileList_SelectionChanged" MouseDoubleClick="AppFileList_DoubleClick" KeyDown="AppFileList_KeyDown">
+                            <ListView.View><GridView>
+                              <GridViewColumn Header="이름" Width="260" DisplayMemberBinding="{Binding Name}"/>
+                              <GridViewColumn Header="종류" Width="120" DisplayMemberBinding="{Binding Kind}"/>
+                              <GridViewColumn Header="크기" Width="90" DisplayMemberBinding="{Binding SizeText}"/>
+                              <GridViewColumn Header="수정 날짜" Width="170" DisplayMemberBinding="{Binding DateText}"/>
+                            </GridView></ListView.View>
+                          </ListView>
+                          <TextBlock x:Name="AppFilesEmpty" Text="앱을 선택하고 ‘앱 파일 불러오기’를 누르세요." Foreground="#718096" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Margin="16"/>
+                        </Grid>
+                        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+                          <WrapPanel><Button x:Name="ImportAppFilesBtn" Content="선택 항목 PC로 가져오기" Style="{StaticResource PrimaryButton}" Click="ImportAppFiles_Click" IsEnabled="False"/><TextBlock x:Name="AppSelectionText" VerticalAlignment="Center" Foreground="#64748B" Margin="4,0,0,6"/></WrapPanel>
+                          <TextBlock Text="폴더 더블클릭: 열기 · Ctrl/Shift: 여러 항목 선택 · 폴더를 가져오면 하위 파일도 함께 저장됩니다." Foreground="#64748B" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                      </Grid>
+                      <Grid x:Name="AppSendPane" Grid.Row="1" Visibility="Collapsed">
+                        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Border BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10"><Grid>
                             <TextBlock x:Name="DropHint"
                                        Text="여기로 파일을 끌어다 놓거나, 아래 '파일 추가' 버튼을 누르세요"
                                        Foreground="#9CA3AF" HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsHitTestVisible="False"/>
                             <ListBox x:Name="FilesToSend" AllowDrop="True" Drop="FilesToSend_Drop"
                                      Background="Transparent" BorderThickness="0"/>
-                        </Grid>
-                    </Border>
-
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
+                        </Grid></Border>
+                    <WrapPanel Grid.Row="1" Margin="0,8,0,0">
                         <Button x:Name="AddFilesBtn" Content="파일 추가" Click="AddFiles_Click"/>
                         <Button x:Name="ClearFilesBtn" Content="목록 비우기" Click="ClearFiles_Click"/>
                         <Button x:Name="SendBtn" Content="선택한 앱으로 보내기" Style="{StaticResource PrimaryButton}"
                                 MinWidth="200" Click="Send_Click" FontWeight="SemiBold"/>
-                    </StackPanel>
+                    </WrapPanel>
+                      </Grid>
+                    </Grid>
                 </Grid>
             </TabItem>
 

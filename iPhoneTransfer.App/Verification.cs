@@ -63,14 +63,39 @@ public partial class MainWindow
         Check(DriverCheck.Text.Contains("설치되어"), "Store Apple Devices does not require desktop service");
         _photos.Add(new(new PhotoItem("/DCIM/test.jpg", "test.jpg", 100, DateTime.Today)));
         AppCombo.ItemsSource = new[] { new SharingApp("fixture", "Fixture") };
+        _appFiles.Add(new("/Documents/stale.pdf", "stale.pdf", false, 50, DateTime.Today));
         DeviceCombo.ItemsSource = new[] { new DeviceInfo("fixture-two", "두 번째 테스트 iPhone") };
         DeviceCombo.SelectedIndex = 0;
-        Check(_photos.Count == 0 && AppCombo.ItemsSource == null, "Switching devices clears stale files and apps");
+        Check(_photos.Count == 0 && AppCombo.ItemsSource == null && _appFiles.Count == 0, "Switching devices clears stale files and apps");
         SetBusy(true, "테스트");
         Check(!DeviceCombo.IsEnabled && !RepairBtn.IsEnabled && !FilesToSend.AllowDrop, "Transfer locks device, repair and drop controls");
         SetBusy(false, "준비 완료");
         Navigate(1);
-        await CaptureAsync("03-send.png");
+        AppCombo.ItemsSource = new[] { new SharingApp("fixture.read", "파일 공유 앱") };
+        AppCombo.SelectedIndex = 0;
+        _appFilesDevice = CurrentDevice!.Udid; _appFilesBundle = "fixture.read";
+        _appDirectory = "/Documents/자료"; AppFolderText.Text = _appDirectory;
+        _appFiles.Add(new("/Documents/자료/문서", "문서", true, 0, DateTime.Today));
+        _appFiles.Add(new("/Documents/자료/book.epub", "book.epub", false, 2_500_000, DateTime.Today));
+        _appFiles.Add(new("/Documents/자료/notes.pdf", "notes.pdf", false, 128_000, DateTime.Today));
+        AppFilesEmpty.Visibility = Visibility.Collapsed;
+        AppFileList.SelectAll();
+        Check(ImportAppFilesBtn.IsEnabled && AppParentBtn.IsEnabled && AppFileList.SelectedItems.Count == 3, "App files support multi-selection and parent navigation");
+        await CaptureAsync("03-app-import.png");
+        Width = 1000; Height = 680;
+        await CaptureAsync("07-app-import-compact.png");
+        Check(AppFileList.ActualHeight >= 65, "App import list remains usable at minimum window size");
+        Width = 1180; Height = 820;
+        SetBusy(true, "앱 가져오기 검증");
+        Check(!ImportAppFilesBtn.IsEnabled && !AppCombo.IsEnabled && !AppParentBtn.IsEnabled && !AppSendRadio.IsEnabled, "App import locks app, direction and navigation until complete");
+        SetBusy(false, "준비 완료");
+        AppSendRadio.IsChecked = true;
+        Check(AppSendPane.Visibility == Visibility.Visible && AppReadPane.Visibility == Visibility.Collapsed, "Existing app upload remains accessible");
+        await CaptureAsync("06-app-send.png");
+        AppReadRadio.IsChecked = true;
+        AppCombo.ItemsSource = new[] { new SharingApp("fixture.other", "다른 앱") };
+        AppCombo.SelectedIndex = 0;
+        Check(_appFiles.Count == 0 && _appDirectory == "/Documents" && !ImportAppFilesBtn.IsEnabled, "Switching apps clears old app selections and paths");
         Navigate(2);
         Width = 1000; Height = 680;
         await CaptureAsync("04-compact.png");
@@ -95,6 +120,60 @@ public partial class MainWindow
 
 internal static class DeviceVerification
 {
+    public static async Task RunAppFilesAsync(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var ready = IPhoneClient.ListDevices().FirstOrDefault(d => d.IsReady);
+        if (ready == null) throw new IOException("검증할 아이폰이 준비되지 않았습니다. 잠금을 해제하고 신뢰를 승인하세요.");
+        var apps = await IPhoneClient.ListSharingAppsAsync(ready.Udid, ct.Token);
+        int checkedApps = 0, checkedDirectories = 0, rejectedApps = 0;
+        AppFileItem? sample = null; SharingApp? sampleApp = null;
+        foreach (var app in apps)
+        {
+            try
+            {
+                var items = await IPhoneClient.ListAppFilesAsync(ready.Udid, app.BundleId, ct: ct.Token);
+                checkedApps++; checkedDirectories++;
+                sample = items.Where(i => !i.IsDirectory && !i.IsSymbolicLink && i.Size is > 0 and < 1_000_000).OrderBy(i => i.Size).FirstOrDefault();
+                if (sample == null)
+                    foreach (var folder in items.Where(i => i.IsDirectory).Take(3))
+                    {
+                        var nested = await IPhoneClient.ListAppFilesAsync(ready.Udid, app.BundleId, folder.DevicePath, ct.Token);
+                        checkedDirectories++;
+                        sample = nested.Where(i => !i.IsDirectory && !i.IsSymbolicLink && i.Size is > 0 and < 1_000_000).OrderBy(i => i.Size).FirstOrDefault();
+                        if (sample != null) break;
+                    }
+                if (sample != null) { sampleApp = app; break; }
+            }
+            catch (MobileDeviceException) { rejectedApps++; }
+        }
+        bool? matches = null;
+        if (sample != null && sampleApp != null)
+        {
+            // Keep the verification local. Only hashes/counts reach the report; no names or device IDs.
+            var temporary = Path.Combine(Path.GetTempPath(), "iPhoneTransfer-app-check-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var first = Path.Combine(temporary, "first"); var second = Path.Combine(temporary, "second");
+                await IPhoneClient.ImportAppFilesAsync(ready.Udid, sampleApp.BundleId, new[] { sample.DevicePath }, first, ct: ct.Token);
+                await IPhoneClient.ImportAppFilesAsync(ready.Udid, sampleApp.BundleId, new[] { sample.DevicePath }, second, ct: ct.Token);
+                var firstFile = Directory.GetFiles(first).Single(); var secondFile = Directory.GetFiles(second).Single();
+                using var a = File.OpenRead(firstFile); using var b = File.OpenRead(secondFile);
+                matches = a.Length == sample.Size && b.Length == sample.Size && SHA256.HashData(a).SequenceEqual(SHA256.HashData(b));
+            }
+            finally { if (Directory.Exists(temporary)) Directory.Delete(temporary, true); }
+        }
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        await File.WriteAllTextAsync(Path.Combine(directory, "app-files-check.json"), JsonSerializer.Serialize(new
+        {
+            ready = true, appCount = apps.Count, checkedApps, checkedDirectories, rejectedApps,
+            sampleImportBytes = sample?.Size, repeatedImportSha256Matches = matches,
+            note = "Read-only app browsing and two local copies of one small file. Samples removed; iPhone files unchanged."
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        if (matches == false || checkedApps == 0) throw new IOException("앱 파일 검증에 실패했습니다.");
+    }
+
     public static async Task RunAsync(string directory)
     {
         Directory.CreateDirectory(directory);

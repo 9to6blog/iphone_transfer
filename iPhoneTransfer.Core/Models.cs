@@ -27,6 +27,17 @@ public sealed record SharingApp(string BundleId, string DisplayName)
     public override string ToString() => $"{DisplayName}  ·  {BundleId}";
 }
 
+/// <summary>A file or folder exposed by an app's Documents file-sharing service.</summary>
+public sealed record AppFileItem(string DevicePath, string Name, bool IsDirectory, long Size,
+    System.DateTime Modified, bool IsSymbolicLink = false)
+{
+    public string Kind => IsSymbolicLink ? "링크 (가져오기 미지원)" : IsDirectory ? "폴더" : "파일";
+    public string SizeText => IsDirectory || IsSymbolicLink ? "—" : new PhotoItem(DevicePath, Name, Size, Modified).SizeText;
+    public string DateText => new PhotoItem(DevicePath, Name, Size, Modified).DateText;
+}
+
+public sealed record AppImportResult(int Files, int Folders, long Bytes);
+
 /// <summary>전송 진행 상황 보고용.</summary>
 public sealed record TransferProgress(int Index, int Total, string CurrentFile, long BytesDone = 0, long BytesTotal = 0)
 {

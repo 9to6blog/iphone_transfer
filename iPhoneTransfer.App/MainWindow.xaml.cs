@@ -31,12 +31,14 @@ public partial class MainWindow : Window
         PhotoList.ItemsSource = _photos;
         PhotoGrid.ItemsSource = _photos;
         FilesToSend.ItemsSource = _filesToSend;
+        AppFileList.ItemsSource = _appFiles;
         _filesToSend.CollectionChanged += (_, _) =>
             DropHint.Visibility = _filesToSend.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ViewGridRadio.IsChecked = true;   // 그리드(썸네일)를 기본 보기로
         _photos.CollectionChanged += (_, _) => PhotoEmpty.Visibility = _photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         InitializeConnectionUi(testMode);
         AutoLaunchCheck.IsChecked = AutoLaunch.Enabled;
+        UpdateAppBrowserButtons();
     }
 
     // ───────────── 공용 헬퍼 ─────────────
@@ -68,6 +70,9 @@ public partial class MainWindow : Window
         AppCombo.IsEnabled = !busy;
         ConvertJpegCheck.IsEnabled = !busy;
         FilesToSend.AllowDrop = !busy;
+        AppReadRadio.IsEnabled = AppSendRadio.IsEnabled = !busy;
+        AppFileList.IsEnabled = !busy;
+        UpdateAppBrowserButtons();
     }
 
     /// <summary>취소 가능한 작업을 시작하고 토큰을 돌려준다.</summary>

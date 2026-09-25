@@ -42,11 +42,12 @@ public partial class MainWindow
 
     private void Navigate_Click(object sender, RoutedEventArgs e) => Navigate(int.Parse((string)((Button)sender).Tag));
     internal void OpenConnectionCenter() => Navigate(2);
+    internal void OpenAppFiles() => Navigate(1);
     private void Navigate(int index)
     {
         MainTabs.SelectedIndex = index;
-        PageTitle.Text = new[] { "사진 가져오기", "앱으로 보내기", "연결 센터" }[index];
-        PageSubtitle.Text = new[] { "아이폰에 담긴 순간을, PC에서도 오래도록.", "파일 공유 앱으로 원하는 파일을 전송하세요.", "연결부터 드라이버 설치까지, 차근차근." }[index];
+        PageTitle.Text = new[] { "사진 가져오기", "앱 파일", "연결 센터" }[index];
+        PageSubtitle.Text = new[] { "아이폰에 담긴 순간을, PC에서도 오래도록.", "앱의 파일을 PC로 가져오거나, PC 파일을 앱으로 보내세요.", "연결부터 드라이버 설치까지, 차근차근." }[index];
         var buttons = new[] { PhotosNav, SendNav, ConnectionNav };
         for (int i = 0; i < buttons.Length; i++)
         {
@@ -113,6 +114,7 @@ public partial class MainWindow
         _thumbCts?.Cancel(); _previewCts?.Cancel();
         _photos.Clear(); _photoSummary = ""; _anchor = -1;
         AppCombo.ItemsSource = null;
+        ResetAppBrowser();
         PreviewImage.Source = null; PreviewCaption.Text = "";
         PreviewMsg.Text = "선택한 사진의 미리보기가 표시됩니다.";
         PreviewMsg.Visibility = Visibility.Visible;

@@ -1,11 +1,11 @@
-﻿; ============================================================
+; ============================================================
 ;  iPhone 사진 전송기 — 원클릭 설치 스크립트 (Inno Setup 6)
 ;  빌드:  ISCC.exe installer.iss   (build-dist.ps1 이 자동 호출)
 ;  특징:  사용자 단위 설치 → 관리자 권한/UAC 불필요(진짜 원클릭)
 ; ============================================================
 #define AppName "iPhone 사진 전송기"
 #define AppExe  "iPhoneTransfer.exe"
-#define AppVer  "2.1.0"
+#define AppVer  "2.2.0"
 #ifndef AppSource
   #define AppSource "dist\iPhoneTransfer"
 #endif

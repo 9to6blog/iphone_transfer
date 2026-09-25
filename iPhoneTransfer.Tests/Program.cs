@@ -80,6 +80,7 @@ Invoke("WalkDir", listingApi, null, "/DCIM", listed, CancellationToken.None);
 if (listed.Count != 8 || listed.Count(p => p.FileName.EndsWith(".HEIC")) != 2 || listed.Count(p => p.FileName.EndsWith(".MOV")) != 2)
     throw new Exception("Camera originals missing from nested DCIM listing");
 Pass("All DCIM folders include HEIC, MOV, PNG and DNG originals without sidecars");
+AppFilesTests.Run(directory, Pass);
 Console.WriteLine($"TOTAL {results.Count} PASS");
 
 public class FakeAfc : DispatchProxy
