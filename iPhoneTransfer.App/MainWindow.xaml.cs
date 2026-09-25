@@ -172,7 +172,7 @@ public partial class MainWindow : Window
     private void Help_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show("HEIC/HEIF 사진은 내장 디코더로 표시합니다. 별도 Windows 코덱 설치가 필요 없습니다.\n\n" +
-            "동영상은 대표 프레임을 표시합니다. 큰 영상은 USB로 임시 복사하므로 시간이 걸릴 수 있습니다. 재생하려면 PC로 가져오세요.\n\n" +
+            "동영상은 필요한 구간만 읽어 썸네일을 표시하고 재사용합니다. 미리보기를 위해 영상 전체를 복사하지 않습니다. 재생하려면 PC로 가져오세요.\n\n" +
             "목록 자체에 원본이 없다면 아이폰 잠금과 iCloud 사진 설정을 확인하세요. iCloud에만 있는 원본은 아이폰에서 다운로드한 뒤 목록을 다시 불러오세요.\n\n" +
             "썸네일 실패 시 항목을 다시 선택하면 재시도합니다. 미리보기 실패와 관계없이 원본을 가져올 수 있습니다.\n\n" +
             "클릭: 한 장 선택 · Ctrl+클릭: 여러 장 · Shift+클릭: 범위 선택", "사진·영상 도움말", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -291,7 +291,7 @@ public partial class MainWindow : Window
         var udid = CurrentDevice.Udid;
         _thumbCts?.Cancel();
         CancelBtn.IsEnabled = true;
-        PreviewMsg.Text = row.IsVideo ? "영상 대표 프레임을 불러오는 중…\n큰 영상은 시간이 걸릴 수 있습니다." : "불러오는 중…";
+        PreviewMsg.Text = row.IsVideo ? "영상 썸네일을 불러오는 중…\n필요한 구간만 읽습니다." : "불러오는 중…";
         PreviewMsg.Visibility = Visibility.Visible;
         try
         {

@@ -69,7 +69,7 @@
   <Grid.ColumnDefinitions><ColumnDefinition Width="202"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
   <Border Background="#14243A"><DockPanel Margin="20,28,20,24">
    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,34"><Border Background="#2864EA" CornerRadius="13" Width="44" Height="44" HorizontalAlignment="Left"><TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="iPhoneTransfer" Foreground="White" FontSize="19" FontWeight="Bold" Margin="0,16,0,6"/><TextBlock Text="사진과 파일, 편안하게." Foreground="#95A8C3" FontSize="12"/></StackPanel>
-   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.3" FontSize="10" Foreground="#738DAE"/></StackPanel>
+   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.4" FontSize="10" Foreground="#738DAE"/></StackPanel>
    <StackPanel><TextBlock Text="WORKSPACE" Foreground="#738DAE" FontSize="10" Margin="10,0,0,14"/>
     <Button x:Name="PhotosNav" Style="{StaticResource NavButton}" Content="사진 가져오기" Tag="0" Click="Navigate_Click"/>
     <Button x:Name="SendNav" Style="{StaticResource NavButton}" Content="앱 파일" Tag="1" Click="Navigate_Click"/>

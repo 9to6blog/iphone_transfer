@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using ImageMagick;
+using System.Buffers.Binary;
+using iPhoneTransfer.Core;
 
 namespace iPhoneTransfer.App;
 
@@ -64,12 +66,30 @@ internal static class MediaVerification
             checks.Add(codec + ": generated synthetic MOV fixture");
             var bitmap = await MediaPreview.VideoFrameAsync(path, 160, ct.Token);
             Check(bitmap.PixelWidth == 80 && bitmap.PixelHeight == 160, codec + ": MOV video thumbnail decodes without Windows codecs");
-            string? copiedVideo = null;
-            var appFrame = await MediaPreview.LoadFileAsync("app.MOV", 160, (destination, token) =>
-            { token.ThrowIfCancellationRequested(); copiedVideo = destination; File.Copy(path, destination); return Task.CompletedTask; }, ct.Token);
-            Check(appFrame.PixelWidth == 80 && appFrame.PixelHeight == 160 && !Directory.Exists(Path.GetDirectoryName(copiedVideo)!),
-                codec + ": app video preview pipeline decodes and removes its temporary movie");
+            var ranges = new PaddedMovieReader(await File.ReadAllBytesAsync(path, ct.Token));
+            var appFrame = await MediaPreview.VideoFrameFromReaderAsync(ranges, "app.MOV", 160, ct.Token);
+            Check(appFrame.PixelWidth == 80 && appFrame.PixelHeight == 160, codec + ": video thumbnail decodes through random-access ranges");
+            Check(ranges.BytesRead < 1024 * 1024 && ranges.ReadTail && ranges.ReadHead && ranges.Length > 500_000_000,
+                codec + $": large MOV with trailing metadata reads only {ranges.BytesRead} of {ranges.Length} bytes");
         }
+        bool copiedMovie = false;
+        try
+        {
+            await MediaPreview.LoadFileAsync("no-copy.MOV", 160, (_, _) => { copiedMovie = true; return Task.CompletedTask; }, ct.Token);
+            throw new Exception("Whole movie copy was accepted");
+        }
+        catch (InvalidOperationException) { Check(!copiedMovie, "Video thumbnail never enters the full-file copy path"); }
+        Check(!VideoRangeServer.TryRange("bytes=0-", long.MaxValue, out _, out _) &&
+            !VideoRangeServer.TryRange("bytes=0-999999999", long.MaxValue, out _, out _) &&
+            !VideoRangeServer.TryRange("bytes=65536-0", 100000, out _, out _) &&
+            VideoRangeServer.TryRange("bytes=65536-131071", 100000, out var rangeStart, out var rangeEnd) && rangeStart == 65536 && rangeEnd == 99999,
+            "Range server rejects unbounded/oversized requests and clips at EOF");
+        try
+        {
+            await MediaPreview.VideoFrameFromReaderAsync(new FailedMediaReader(), "error.mov", 160, ct.Token);
+            throw new Exception("Broken range source was accepted");
+        }
+        catch (IOException) { checks.Add("USB range failure stops FFmpeg without falling back to a complete movie copy"); }
         string? failedPath = null;
         try
         {
@@ -83,6 +103,9 @@ internal static class MediaVerification
             canceled.Cancel();
             try { await MediaPreview.VideoFrameAsync(Path.Combine(directory, "libx265.mov"), 160, canceled.Token); throw new Exception("Cancellation ignored"); }
             catch (OperationCanceledException) { checks.Add("Canceled video preview stops its decoder process"); }
+            var source = new PaddedMovieReader(await File.ReadAllBytesAsync(Path.Combine(directory, "libx265.mov"), ct.Token));
+            try { await MediaPreview.VideoFrameFromReaderAsync(source, "cancel.mov", 160, canceled.Token); throw new Exception("Range cancellation ignored"); }
+            catch (OperationCanceledException) { Check(source.BytesRead == 0, "Canceled ranged preview reads no video bytes and closes its server"); }
         }
         var arrivals = new UsbArrivalTracker();
         ProbeResult Present(params string[] ids) => new(ids.Select(id => new iPhoneTransfer.Core.DeviceInfo(id, "fixture", false)).ToList());
@@ -93,5 +116,56 @@ internal static class MediaVerification
         Check(!arrivals.Update(Present()) && arrivals.Update(Present("A")), "Reconnect opens window again");
         Check(arrivals.Update(Present("A", "B")), "Second device arrival is recognized");
         await File.WriteAllTextAsync(Path.Combine(directory, "media-checks.json"), JsonSerializer.Serialize(checks, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private sealed class FailedMediaReader : IMediaReader
+    {
+        public long Length => 1L << 30;
+        public long BytesRead => 0;
+        public int ReadAt(long offset, byte[] buffer, int count, CancellationToken ct) => throw new IOException("USB fixture failure");
+    }
+
+    // A valid MOV with a virtual 512 MiB free atom before its trailing moov metadata.
+    // Chunk offsets stay valid; decoding must seek to the tail and back, never traverse the padding.
+    private sealed class PaddedMovieReader : IMediaReader
+    {
+        private readonly byte[] _original;
+        private readonly int _moov;
+        private const int Padding = 512 * 1024 * 1024;
+        private readonly byte[] _free = new byte[8];
+        public long Length => _original.Length + (long)Padding;
+        public long BytesRead { get; private set; }
+        public bool ReadTail { get; private set; }
+        public bool ReadHead { get; private set; }
+        internal PaddedMovieReader(byte[] original)
+        {
+            _original = original;
+            for (int at = 0; at + 8 <= original.Length;)
+            {
+                var size = checked((int)BinaryPrimitives.ReadUInt32BigEndian(original.AsSpan(at, 4)));
+                if (System.Text.Encoding.ASCII.GetString(original, at + 4, 4) == "moov") { _moov = at; break; }
+                if (size < 8) throw new IOException("Invalid fixture atom");
+                at += size;
+            }
+            if (_moov == 0) throw new IOException("Missing trailing moov fixture");
+            BinaryPrimitives.WriteInt32BigEndian(_free, Padding);
+            System.Text.Encoding.ASCII.GetBytes("free").CopyTo(_free, 4);
+        }
+        public int ReadAt(long offset, byte[] buffer, int count, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (BytesRead + count > 1024 * 1024) throw new IOException("Decoder tried to read too much of the movie");
+            int n = (int)Math.Min(count, Length - offset);
+            for (int i = 0; i < n; i++)
+            {
+                long at = offset + i;
+                buffer[i] = at < _moov ? _original[(int)at] : at < _moov + 8 ? _free[(int)(at - _moov)]
+                    : at < _moov + (long)Padding ? (byte)0 : _original[(int)(at - Padding)];
+            }
+            ReadHead |= offset < _moov;
+            ReadTail |= offset + n > _moov + (long)Padding;
+            BytesRead += n;
+            return n;
+        }
     }
 }

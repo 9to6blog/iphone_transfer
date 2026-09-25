@@ -10,20 +10,60 @@ internal static class MediaPreview
 {
     // Limit concurrent native decoders and USB preview transfers. Originals are never changed.
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    private sealed record VideoKey(string Device, string? App, string Path, long Size, DateTime Modified);
+    private static readonly Dictionary<VideoKey, BitmapSource> VideoCache = new();
+    private static readonly Queue<VideoKey> VideoOrder = new();
+    internal sealed record VideoReadStats(long SourceBytes, long UsbBytes, bool CacheHit);
+    internal static VideoReadStats? LastVideoRead { get; private set; }
     internal static string FfmpegPath => Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
     internal static bool IsVideo(string name) => Path.GetExtension(name).ToLowerInvariant() is ".mov" or ".mp4" or ".m4v" or ".avi" or ".mkv" or ".webm";
     internal static bool IsImage(string name) => Path.GetExtension(name).ToLowerInvariant() is
         ".jpg" or ".jpeg" or ".png" or ".heic" or ".heif" or ".tif" or ".tiff" or ".gif" or ".bmp" or ".webp" or ".dng" or ".avif";
 
     internal static Task<BitmapSource> LoadAsync(string udid, PhotoItem item, int width, CancellationToken ct)
-        => LoadFileAsync(item.FileName, width, (path, token) => IPhoneClient.CopyPhotoToFileAsync(udid, item, path, token), ct);
+        => IsVideo(item.FileName) ? LoadVideoAsync(udid, null, item, ct)
+            : LoadFileAsync(item.FileName, width, (path, token) => IPhoneClient.CopyPhotoToFileAsync(udid, item, path, token), ct);
 
     internal static Task<BitmapSource> LoadAppAsync(string udid, string bundleId, AppFileItem item, int width, CancellationToken ct)
-        => LoadFileAsync(item.Name, width, (path, token) => IPhoneClient.CopyAppFileToFileAsync(udid, bundleId, item, path, token), ct);
+        => IsVideo(item.Name) ? LoadVideoAsync(udid, bundleId, new(item.DevicePath, item.Name, item.Size, item.Modified), ct)
+            : LoadFileAsync(item.Name, width, (path, token) => IPhoneClient.CopyAppFileToFileAsync(udid, bundleId, item, path, token), ct);
+
+    private static async Task<BitmapSource> LoadVideoAsync(string udid, string? bundleId, PhotoItem item, CancellationToken ct)
+    {
+        var key = new VideoKey(udid, bundleId, item.DevicePath, item.Size, item.Modified);
+        await Gate.WaitAsync(ct);
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            if (VideoCache.TryGetValue(key, out var cached)) { LastVideoRead = new(item.Size, 0, true); return cached; }
+            var bitmap = await IPhoneClient.WithMediaReaderAsync(udid, bundleId, item,
+                async reader =>
+                {
+                    var frame = await VideoFrameFromReaderAsync(reader, item.FileName, 640, ct);
+                    LastVideoRead = new(reader.Length, reader.BytesRead, false);
+                    return frame;
+                }, ct);
+            ct.ThrowIfCancellationRequested();
+            VideoCache.Add(key, bitmap); VideoOrder.Enqueue(key);
+            while (VideoOrder.Count > 24) VideoCache.Remove(VideoOrder.Dequeue());
+            return bitmap;
+        }
+        finally { Gate.Release(); }
+    }
+
+    internal static async Task<BitmapSource> VideoFrameFromReaderAsync(IMediaReader reader, string name, int width, CancellationToken ct)
+    {
+        await using var server = new VideoRangeServer(reader, ct);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, server.Failure);
+        try { return await VideoFrameAsync(server.Url, width, lifetime.Token, name); }
+        catch (Exception) when (server.Error != null && !ct.IsCancellationRequested)
+        { throw new IOException("영상 썸네일을 부분 읽기로 만들지 못했습니다. 전체 영상은 다운로드하지 않습니다.", server.Error); }
+    }
 
     internal static async Task<BitmapSource> LoadFileAsync(string name, int width,
         Func<string, CancellationToken, Task> copyFile, CancellationToken ct)
     {
+        if (IsVideo(name)) throw new InvalidOperationException("영상 미리보기는 전체 파일 복사를 사용할 수 없습니다.");
         await Gate.WaitAsync(ct);
         var folder = Path.Combine(Path.GetTempPath(), "iPhoneTransfer-preview", Guid.NewGuid().ToString("N"));
         try
@@ -32,9 +72,7 @@ internal static class MediaPreview
             var path = Path.Combine(folder, "source" + Path.GetExtension(name));
             await copyFile(path, ct);
             ct.ThrowIfCancellationRequested();
-            return IsVideo(name)
-                ? await VideoFrameAsync(path, width, ct)
-                : await Task.Run(() => DecodeImage(path, width), ct);
+            return await Task.Run(() => DecodeImage(path, width), ct);
         }
         finally
         {
@@ -88,16 +126,22 @@ internal static class MediaPreview
         return bitmap;
     }
 
-    internal static async Task<BitmapSource> VideoFrameAsync(string path, int width, CancellationToken ct)
+    internal static async Task<BitmapSource> VideoFrameAsync(string path, int width, CancellationToken ct, string? remoteName = null)
     {
         var start = new ProcessStartInfo(FfmpegPath)
         {
             UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true
         };
-        // A local seekable file handles iPhone MOV files whose index is at the end.
-        foreach (var arg in new[] { "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "2",
-                     "-i", path, "-map", "0:v:0", "-frames:v", "1", "-vf",
+        foreach (var arg in new[] { "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "2" }) start.ArgumentList.Add(arg);
+        if (remoteName != null)
+        {
+            var format = Path.GetExtension(remoteName).ToLowerInvariant() switch { ".avi" => "avi", ".mkv" or ".webm" => "matroska", _ => "mov" };
+            foreach (var arg in new[] { "-http_proxy", "", "-protocol_whitelist", "http,tcp", "-request_size", "65536",
+                "-initial_request_size", "65536", "-short_seek_size", "65536", "-multiple_requests", "0", "-seekable", "1",
+                "-probesize", "262144", "-analyzeduration", "100000", "-f", format }) start.ArgumentList.Add(arg);
+        }
+        foreach (var arg in new[] { "-i", path, "-map", "0:v:0", "-frames:v", "1", "-vf",
                      $"scale={width}:{width}:force_original_aspect_ratio=decrease", "-threads", "2",
                      "-f", "image2pipe", "-c:v", "png", "pipe:1" }) start.ArgumentList.Add(arg);
         using var process = Process.Start(start) ?? throw new IOException("동영상 미리보기를 시작하지 못했습니다.");

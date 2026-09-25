@@ -161,6 +161,54 @@ public partial class MainWindow
 
 internal static class DeviceVerification
 {
+    public static async Task RunVideoRangesAsync(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        using var ct = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var device = IPhoneClient.ListDevices().FirstOrDefault(d => d.IsReady) ?? throw new IOException("아이폰 연결이 필요합니다.");
+        var reports = new List<object>();
+        var photos = await IPhoneClient.ListPhotosAsync(device.Udid, ct.Token);
+        var movie = photos.Where(p => MediaPreview.IsVideo(p.FileName)).OrderByDescending(p => p.Size).FirstOrDefault();
+        if (movie != null) await Verify(null, movie);
+        var apps = await IPhoneClient.ListSharingAppsAsync(device.Udid, ct.Token);
+        AppFileItem? best = null; string? bestApp = null;
+        foreach (var app in apps)
+        {
+            try
+            {
+                var folders = new Queue<(string Path, int Depth)>(); folders.Enqueue(("/Documents", 0));
+                for (int i = 0; i < 5 && folders.Count > 0; i++)
+                {
+                    var folder = folders.Dequeue();
+                    var items = await IPhoneClient.ListAppFilesAsync(device.Udid, app.BundleId, folder.Path, ct.Token);
+                    var candidate = items.Where(f => !f.IsDirectory && !f.IsSymbolicLink && MediaPreview.IsVideo(f.Name)).OrderByDescending(f => f.Size).FirstOrDefault();
+                    if (candidate != null && (best == null || candidate.Size > best.Size)) { best = candidate; bestApp = app.BundleId; }
+                    if (folder.Depth < 2) foreach (var child in items.Where(f => f.IsDirectory).Take(4)) folders.Enqueue((child.DevicePath, folder.Depth + 1));
+                }
+            }
+            catch (MobileDeviceException) { }
+            if (best?.Size > 50_000_000) break;
+        }
+        if (best != null) await Verify(bestApp, new(best.DevicePath, best.Name, best.Size, best.Modified));
+        await File.WriteAllTextAsync(Path.Combine(directory, "video-ranges-check.json"), JsonSerializer.Serialize(reports, new JsonSerializerOptions { WriteIndented = true }));
+        if (reports.Count == 0) throw new IOException("검증할 영상이 없습니다.");
+
+        async Task Verify(string? app, PhotoItem item)
+        {
+            Task<BitmapSource> Load(int width) => app == null ? MediaPreview.LoadAsync(device.Udid, item, width, ct.Token)
+                : MediaPreview.LoadAppAsync(device.Udid, app, new(item.DevicePath, item.FileName, false, item.Size, item.Modified), width, ct.Token);
+            var frame = await Load(480);
+            var first = MediaPreview.LastVideoRead!;
+            var again = await Load(1920);
+            var second = MediaPreview.LastVideoRead!;
+            if (first.UsbBytes > 16L * 1024 * 1024 || !second.CacheHit || second.UsbBytes != 0 || !ReferenceEquals(frame, again))
+                throw new IOException("영상 부분 읽기/캐시 검증에 실패했습니다.");
+            reports.Add(new { source = app == null ? "camera" : "app", first.SourceBytes, first.UsbBytes,
+                percentRead = Math.Round(first.UsbBytes * 100.0 / first.SourceBytes, 3), repeatedReadBytes = second.UsbBytes,
+                width = frame.PixelWidth, height = frame.PixelHeight, fullMovieCopied = false });
+        }
+    }
+
     public static async Task RunAppMediaAsync(string directory)
     {
         Directory.CreateDirectory(directory);

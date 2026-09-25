@@ -110,7 +110,7 @@ public partial class MainWindow
         _appThumbCts?.Cancel(); _appThumbCts = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _appPreviewCts = cts; CancelBtn.IsEnabled = true;
-        AppPreviewMessage.Text = row.IsVideo ? "영상 대표 화면을 불러오는 중…\n큰 영상은 시간이 걸릴 수 있습니다." : "사진을 불러오는 중…";
+        AppPreviewMessage.Text = row.IsVideo ? "영상 썸네일을 불러오는 중…\n필요한 구간만 읽습니다." : "사진을 불러오는 중…";
         try
         {
             var bitmap = row.Thumbnail as BitmapSource ?? await _appMediaLoader(device, bundle, row.Item, 800, cts.Token);
