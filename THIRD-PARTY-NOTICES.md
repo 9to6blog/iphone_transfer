@@ -24,3 +24,18 @@ The licenses directory also includes the .NET and WPF license and .NET third-par
 Component licenses and source are available at the upstream links above.
 Apple Devices, iTunes and Apple USB drivers are obtained separately from Apple
 or Microsoft Store and are not included in this distribution.
+
+## Media previews (2.1)
+
+- Magick.NET-Q8-x64 / Magick.NET.Core 14.17.1, Apache-2.0:
+  https://github.com/dlemstra/Magick.NET/tree/298053457c16f413a9df6edaca668b12289bea2d
+  Includes ImageMagick, libheif and libde265. Full component notices and licenses
+  are in `licenses/Magick.NET-NOTICE.txt` and `licenses/Magick.NET-LICENSE.txt`.
+- FFmpeg 9.0.2 essentials Windows build by Gyan, GPL v3, invoked as a separate executable:
+  https://www.gyan.dev/ffmpeg/builds/ ; source revision
+  https://github.com/FFmpeg/FFmpeg/commit/946fcce07b
+  Original build details and license: `licenses/ffmpeg-BUILD.txt`, `licenses/ffmpeg-LICENSE.txt`.
+  Pinned binary/archive hashes: `vendor/ffmpeg/README.md` in the source repository.
+- Embedded HEIC verification fixture from libheif examples, MIT:
+  https://github.com/strukturag/libheif/tree/5c7b41f3cc097447dd3c700cc9ec7d94fbb59eec/examples
+  See `licenses/libheif-example-LICENSE.txt`.

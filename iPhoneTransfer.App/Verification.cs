@@ -36,6 +36,7 @@ public partial class MainWindow
         await CaptureAsync("01-photos.png");
         Navigate(2);
         await CaptureAsync("02-connection.png");
+        Check(AutoLaunchCheck.Content.ToString()!.Contains("자동 실행"), "Connection center exposes automatic launch preference");
         _host = new(26200, "AMD64", true, "NotInstalled", 2, 0);
         DeviceCombo.ItemsSource = new[] { new DeviceInfo("fixture-one", "테스트 iPhone", false, "아이폰 잠금을 해제하고 신뢰를 승인하세요.") };
         DeviceCombo.SelectedIndex = 0;
@@ -46,6 +47,19 @@ public partial class MainWindow
         DeviceCombo.SelectedIndex = 0;
         RenderConnection();
         Check(RequireDevice(), "Ready device can transfer");
+        using (var fixture = typeof(MediaVerification).Assembly.GetManifestResourceStream("iPhoneTransfer.TestFixture.heic")!)
+        {
+            using var buffer = new MemoryStream(); fixture.CopyTo(buffer);
+            var preview = MediaPreview.DecodeImage(buffer.ToArray(), 480);
+            _photos.Add(new(new PhotoItem("/DCIM/IMG_0001.HEIC", "IMG_0001.HEIC", 718114, DateTime.Today)) { Thumbnail = preview });
+            _photos.Add(new(new PhotoItem("/DCIM/IMG_0001.MOV", "IMG_0001.MOV", 2718114, DateTime.Today)) { Thumbnail = preview });
+            _photos.Add(new(new PhotoItem("/DCIM/error.HEIC", "error.HEIC", 100, DateTime.Today)) { PreviewError = "테스트: 원본을 다시 읽어 주세요." });
+            PreviewImage.Source = preview; PreviewMsg.Visibility = Visibility.Collapsed;
+            PreviewCaption.Text = "IMG_0001.HEIC · HEIC 미리보기";
+            Navigate(0);
+            await CaptureAsync("05-media-preview.png");
+            Check(_photos[1].MediaLabel == "영상" && _photos[2].Placeholder.Contains("재시도"), "Video badge and retry guidance remain visible");
+        }
         Check(DriverCheck.Text.Contains("설치되어"), "Store Apple Devices does not require desktop service");
         _photos.Add(new(new PhotoItem("/DCIM/test.jpg", "test.jpg", 100, DateTime.Today)));
         AppCombo.ItemsSource = new[] { new SharingApp("fixture", "Fixture") };

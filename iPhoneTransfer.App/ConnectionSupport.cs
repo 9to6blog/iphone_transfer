@@ -27,17 +27,17 @@ internal static class ConnectionSupport
 
     // Native handshake calls have no reliable managed cancellation. Isolate probes in a
     // short-lived process so a hung native driver never blocks the UI or leaks probe tasks.
-    public static async Task<ProbeResult> ProbeAsync(CancellationToken ct)
+    public static async Task<ProbeResult> ProbeAsync(CancellationToken ct, bool usbOnly = false)
     {
         var path = Path.Combine(Path.GetTempPath(), $"iphone-probe-{Guid.NewGuid():N}.json");
         try
         {
             var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
-            start.ArgumentList.Add("--probe");
+            start.ArgumentList.Add(usbOnly ? "--usb-probe" : "--probe");
             start.ArgumentList.Add(path);
             using var process = Process.Start(start) ?? throw new IOException("연결 검사 프로세스를 시작하지 못했습니다.");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(22));
+            timeout.CancelAfter(TimeSpan.FromSeconds(usbOnly ? 5 : 22));
             try { await process.WaitForExitAsync(timeout.Token); }
             catch (OperationCanceledException)
             {

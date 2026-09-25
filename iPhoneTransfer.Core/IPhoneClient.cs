@@ -121,6 +121,34 @@ public static class IPhoneClient
 
     // ───────────────────────── 사진 가져오기 (iPhone → PC) ─────────────────────────
 
+    /// <summary>Pairing-free USB detection for the background connection watcher.</summary>
+    public static IReadOnlyList<string> ListUsbDeviceIds()
+    {
+        EnsureInitialized();
+        int count = 0;
+        Check(Lib.iDevice.idevice_get_device_list(out ReadOnlyCollection<string> ids, ref count), "Apple USB 검색 실패");
+        return ids?.Distinct().ToArray() ?? Array.Empty<string>();
+    }
+
+    /// <summary>Stream even large camera videos to disk, never truncate or buffer the entire movie.</summary>
+    public static Task CopyPhotoToFileAsync(string udid, PhotoItem item, string destination, CancellationToken ct)
+        => Task.Run(() =>
+        {
+            using var device = OpenDevice(udid);
+            var api = Lib.Afc;
+            Check(api.afc_client_start_service(device, out var afc, Label), "사진 영역(AFC) 접근 실패");
+            using (afc)
+            {
+                try
+                {
+                    ReadDeviceFile(api, afc, item.DevicePath, destination, ct);
+                    ct.ThrowIfCancellationRequested();
+                    if (new FileInfo(destination).Length != item.Size) throw new IOException("원본 크기가 달라졌습니다. 사진 목록을 다시 불러오세요.");
+                }
+                catch { try { File.Delete(destination); } catch { } throw; }
+            }
+        }, ct);
+
     public static Task<List<PhotoItem>> ListPhotosAsync(string udid, CancellationToken ct = default)
         => Task.Run(() => ListPhotos(udid, ct), ct);
 

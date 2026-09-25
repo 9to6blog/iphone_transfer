@@ -73,6 +73,7 @@ public partial class MainWindow
             if (_busy || _actionRunning || _lifetime.IsCancellationRequested) return;
             _lastProbe = probe;
             var udid = CurrentDevice?.Udid;
+            var wasReady = CurrentDevice?.IsReady == true;
             _updatingSelection = true;
             DeviceCombo.ItemsSource = probe.Devices;
             DeviceCombo.SelectedItem = probe.Devices.FirstOrDefault(d => d.Udid == udid)
@@ -80,6 +81,8 @@ public partial class MainWindow
             _updatingSelection = false;
             ApplySelectedDevice();
             RenderConnection();
+            if (CurrentDevice?.IsReady == true && (!wasReady || udid != CurrentDevice.Udid))
+                await LoadPhotosAsync();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -153,6 +156,21 @@ public partial class MainWindow
     }
 
     private async void Diagnose_Click(object sender, RoutedEventArgs e) => await RefreshConnectionAsync(true);
+    private void AutoLaunch_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            AutoLaunch.SetEnabled(AutoLaunchCheck.IsChecked == true);
+            ActionResult.Text = AutoLaunchCheck.IsChecked == true
+                ? "자동 실행을 켰습니다. Windows 로그인 후 알림 영역에서 연결을 기다리며, 아이폰을 연결하면 창이 열립니다."
+                : "자동 실행과 백그라운드 연결 감지를 껐습니다.";
+        }
+        catch (Exception ex)
+        {
+            AutoLaunchCheck.IsChecked = AutoLaunch.Enabled;
+            ActionResult.Text = "자동 실행 설정 실패: " + ex.Message;
+        }
+    }
     private async void InstallApple_Click(object sender, RoutedEventArgs e) => await RunSetupAsync("InstallAppleDevices");
     private async void InstallITunes_Click(object sender, RoutedEventArgs e) => await RunSetupAsync("InstallITunes");
     private async void Repair_Click(object sender, RoutedEventArgs e) => await RunSetupAsync("Repair");

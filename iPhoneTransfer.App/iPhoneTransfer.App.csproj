@@ -6,10 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 
     <AssemblyName>iPhoneTransfer</AssemblyName>
     <Product>iPhone 사진 전송기</Product>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>appicon.ico</ApplicationIcon>
 
@@ -20,9 +22,28 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Content Include="..\vendor\ffmpeg\ffmpeg.exe" Link="ffmpeg.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="..\iPhoneTransfer.Core\iPhoneTransfer.Core.csproj" />
     <Resource Include="appicon.ico" />
+    <EmbeddedResource Include="..\iPhoneTransfer.Tests\Fixtures\example.heic" LogicalName="iPhoneTransfer.TestFixture.heic" />
     <Content Include="..\connection-setup.ps1" Link="install-prerequisites.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-x64" Version="14.17.1" />
+  </ItemGroup>
+
+  <Target Name="RestorePinnedVideoDecoder" BeforeTargets="PrepareForBuild">
+    <GetFileHash Files="$(MSBuildProjectDirectory)\..\vendor\ffmpeg\ffmpeg-9.0.2-win-x64.zip" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="VideoArchiveHash" />
+    </GetFileHash>
+    <Error Condition="'$(VideoArchiveHash)' != '9114190312DF510AC9C79CA8F16A1FA0F18B7E41691EE500BC062546C8F9E768'" Text="Pinned FFmpeg archive checksum mismatch." />
+    <Unzip SourceFiles="$(MSBuildProjectDirectory)\..\vendor\ffmpeg\ffmpeg-9.0.2-win-x64.zip" DestinationFolder="$(MSBuildProjectDirectory)\..\vendor\ffmpeg" />
+    <GetFileHash Files="$(MSBuildProjectDirectory)\..\vendor\ffmpeg\ffmpeg.exe" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="VideoDecoderHash" />
+    </GetFileHash>
+    <Error Condition="'$(VideoDecoderHash)' != '3256173F3F8BFFD7DF12227C68ADF68025EDB1832273A9530688A7BB1ED8EDEC'" Text="Pinned FFmpeg executable checksum mismatch." />
+  </Target>
 </Project>

@@ -67,6 +67,19 @@ Throws<MobileDeviceException>(()=>Invoke("UniqueDevicePath",errorApi,null,"/Docu
 var xml="<plist><array><dict><key>CFBundleIdentifier</key><string>test.shared</string><key>CFBundleDisplayName</key><string>Shared</string><key>UIFileSharingEnabled</key><true/></dict><dict><key>CFBundleIdentifier</key><string>private</string><key>UIFileSharingEnabled</key><false/></dict></array></plist>";
 var apps=(List<SharingApp>)Invoke("ParseSharingApps",xml,CancellationToken.None)!;
 if(apps.Count!=1 || apps[0].BundleId!="test.shared")throw new Exception("Sharing filter failed");Pass("Only file sharing enabled apps are exposed");
+var listingApi = Fake((m, a) =>
+{
+    if (m.Name == "afc_read_directory") a[2] = new ReadOnlyCollection<string>((string)a[1]! == "/DCIM"
+        ? new[] { ".", "..", "100APPLE", "101APPLE" }
+        : new[] { "IMG_0001.HEIC", "IMG_0001.MOV", "IMG_0002.PNG", "IMG_0003.DNG", "IMG_0001.AAE" });
+    if (m.Name == "afc_get_file_info") a[2] = new ReadOnlyCollection<string>(new[] { "st_ifmt", Path.HasExtension((string)a[1]!) ? "S_IFREG" : "S_IFDIR", "st_size", "100" });
+    return AfcError.Success;
+});
+var listed = new List<PhotoItem>();
+Invoke("WalkDir", listingApi, null, "/DCIM", listed, CancellationToken.None);
+if (listed.Count != 8 || listed.Count(p => p.FileName.EndsWith(".HEIC")) != 2 || listed.Count(p => p.FileName.EndsWith(".MOV")) != 2)
+    throw new Exception("Camera originals missing from nested DCIM listing");
+Pass("All DCIM folders include HEIC, MOV, PNG and DNG originals without sidecars");
 Console.WriteLine($"TOTAL {results.Count} PASS");
 
 public class FakeAfc : DispatchProxy

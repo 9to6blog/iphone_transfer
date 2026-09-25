@@ -18,7 +18,7 @@ namespace iPhoneTransfer.App;
 public sealed class ImageViewerWindow : Window
 {
     private readonly string _udid;
-    private readonly string _devicePath;
+    private readonly PhotoItem _item;
     private readonly Image _image = new() { Stretch = Stretch.Uniform };
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TranslateTransform _translate = new(0, 0);
@@ -36,12 +36,12 @@ public sealed class ImageViewerWindow : Window
     private Point _lastDrag;
     private bool _dragging;
 
-    public ImageViewerWindow(string udid, string devicePath, string fileName)
+    public ImageViewerWindow(string udid, PhotoItem item)
     {
         _udid = udid;
-        _devicePath = devicePath;
+        _item = item;
 
-        Title = $"{fileName} — 크게보기 (휠=확대/축소, 드래그=이동, 더블클릭=원래대로, ESC=닫기)";
+        Title = $"{item.FileName} — {(MediaPreview.IsVideo(item.FileName) ? "영상 대표 프레임" : "크게보기")} (휠=확대/축소, 드래그=이동, ESC=닫기)";
         Width = 1000;
         Height = 720;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -111,35 +111,17 @@ public sealed class ImageViewerWindow : Window
         _cts = new CancellationTokenSource();
         try
         {
-            var bytes = await IPhoneClient.ReadFileBytesAsync(_udid, _devicePath, 0, _cts.Token);
-            var bmp = Decode(bytes);
-            if (bmp == null)
-            {
-                _msg.Text = "이미지를 표시할 수 없습니다.\n(HEIC 코덱 미설치 등 — 메인 창의 '❓ 일부만 보일 때' 참고)";
-                return;
-            }
+            var bmp = await MediaPreview.LoadAsync(_udid, _item, MediaPreview.IsVideo(_item.FileName) ? 1920 : 0, _cts.Token);
+            _cts.Token.ThrowIfCancellationRequested();
             _image.Source = bmp;
             _msg.Visibility = Visibility.Collapsed;
         }
         catch (OperationCanceledException) { /* 창이 닫힘 */ }
         catch (Exception)
         {
-            _msg.Text = "이미지를 불러오지 못했습니다.";
+            _msg.Text = "미리보기를 불러오지 못했습니다.\n아이폰 잠금을 해제하고 다시 시도하거나 원본을 PC로 가져오세요.";
         }
+        finally { _cts.Dispose(); _cts = null; }
     }
 
-    private static BitmapImage? Decode(byte[] bytes)
-    {
-        try
-        {
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.StreamSource = new MemoryStream(bytes);
-            bmp.EndInit();
-            bmp.Freeze();
-            return bmp;
-        }
-        catch { return null; }
-    }
 }

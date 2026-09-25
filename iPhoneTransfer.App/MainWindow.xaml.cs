@@ -24,8 +24,6 @@ public partial class MainWindow : Window
     private int _anchor = -1;            // Shift 범위 선택 기준점
     private string _photoSummary = "";   // "총 N개 ..." 요약(선택 개수와 합쳐 표시)
 
-    private static readonly HashSet<string> VideoExt = new(StringComparer.OrdinalIgnoreCase)
-    { ".mov", ".mp4", ".m4v", ".avi" };
 
     public MainWindow(bool testMode = false)
     {
@@ -38,6 +36,7 @@ public partial class MainWindow : Window
         ViewGridRadio.IsChecked = true;   // 그리드(썸네일)를 기본 보기로
         _photos.CollectionChanged += (_, _) => PhotoEmpty.Visibility = _photos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         InitializeConnectionUi(testMode);
+        AutoLaunchCheck.IsChecked = AutoLaunch.Enabled;
     }
 
     // ───────────── 공용 헬퍼 ─────────────
@@ -91,6 +90,7 @@ public partial class MainWindow : Window
     {
         _opCts?.Cancel();
         _thumbCts?.Cancel();
+        _previewCts?.Cancel();
         StatusText.Text = "취소 중…";
     }
 
@@ -121,7 +121,9 @@ public partial class MainWindow : Window
 
     // ───────────── 가져오기 ─────────────
 
-    private async void LoadPhotos_Click(object sender, RoutedEventArgs e)
+    private async void LoadPhotos_Click(object sender, RoutedEventArgs e) => await LoadPhotosAsync();
+
+    private async Task LoadPhotosAsync()
     {
         if (_busy || !RequireDevice()) return;
         var ct = BeginOp();
@@ -156,30 +158,11 @@ public partial class MainWindow : Window
 
     private void Help_Click(object sender, RoutedEventArgs e)
     {
-        var msg =
-            "사진이 일부만 보이거나 썸네일이 일부만 뜨는 경우\n\n" +
-            "■ 경우 A — 목록엔 다 있는데(예: 총 256개) 썸네일이 일부만 이미지로 뜸\n" +
-            "    원인: 나머지가 HEIC 형식이라 Windows에서 디코딩이 안 됨(코덱 미설치).\n" +
-            "    해결: 무료 'HEIF 이미지 확장'을 설치하면 즉시 전부 표시됩니다.\n" +
-            "          (또는 가져올 때 JPG로 변환)\n\n" +
-            "■ 경우 B — 목록의 개수 자체가 적음(예: 총 42개)\n" +
-            "    원인: iCloud '사진 최적화'로 원본이 기기에 없고 클라우드에만 있음.\n" +
-            "          USB로는 기기에 실제 저장된 원본만 가져올 수 있습니다.\n" +
-            "    해결: 아이폰 → 설정 → 사진 → '원본 다운로드 및 보관' 선택 후\n" +
-            "          Wi-Fi로 전체 내려받고 다시 시도.\n\n" +
-            "구분법: 하단 상태줄의 '성공/실패' 숫자.\n" +
-            "  · 실패가 많다 → 경우 A (HEIC 코덱)\n" +
-            "  · 총 개수가 적다 → 경우 B (iCloud)\n\n" +
-            "[ 선택 단축키 ]\n" +
-            "  · 클릭: 한 장만 선택   · Ctrl+클릭: 여러 장 토글   · Shift+클릭: 범위 선택\n\n" +
-            "지금 'HEIF 이미지 확장' 설치 페이지를 열까요?";
-
-        if (MessageBox.Show(msg, "도움말 — 사진이 일부만 보일 때", MessageBoxButton.YesNo, MessageBoxImage.Question)
-            == MessageBoxResult.Yes)
-        {
-            OpenUrl("ms-windows-store://pdp/?productid=9PMMSR1CGPWG",
-                    "https://apps.microsoft.com/detail/9PMMSR1CGPWG");
-        }
+        MessageBox.Show("HEIC/HEIF 사진은 내장 디코더로 표시합니다. 별도 Windows 코덱 설치가 필요 없습니다.\n\n" +
+            "동영상은 대표 프레임을 표시합니다. 큰 영상은 USB로 임시 복사하므로 시간이 걸릴 수 있습니다. 재생하려면 PC로 가져오세요.\n\n" +
+            "목록 자체에 원본이 없다면 아이폰 잠금과 iCloud 사진 설정을 확인하세요. iCloud에만 있는 원본은 아이폰에서 다운로드한 뒤 목록을 다시 불러오세요.\n\n" +
+            "썸네일 실패 시 항목을 다시 선택하면 재시도합니다. 미리보기 실패와 관계없이 원본을 가져올 수 있습니다.\n\n" +
+            "클릭: 한 장 선택 · Ctrl+클릭: 여러 장 · Shift+클릭: 범위 선택", "사진·영상 도움말", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private static void OpenUrl(string primary, string fallback)
@@ -237,67 +220,19 @@ public partial class MainWindow : Window
         e.Handled = true; // ListView 기본 선택 동작 억제
     }
 
-    /// <summary>더블클릭한 사진을 별도 창에서 크게 본다(영상은 미지원).</summary>
+    /// <summary>사진 또는 동영상 대표 프레임을 크게 본다.</summary>
     private void OpenLargeView(PhotoRow row)
     {
-        if (CurrentDevice == null) return;
-        if (row.IsVideo)
-        {
-            MessageBox.Show("동영상은 크게보기를 지원하지 않습니다.\n‘선택 항목 PC로 가져오기’로 내려받아 재생하세요.",
-                "동영상", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        new ImageViewerWindow(CurrentDevice.Udid, row.DevicePath, row.FileName) { Owner = this }.Show();
+        if (CurrentDevice == null || _busy) return;
+        _thumbCts?.Cancel();
+        var viewer = new ImageViewerWindow(CurrentDevice.Udid, row.Item) { Owner = this };
+        viewer.Closed += (_, _) => { if (!_busy && !_lifetime.IsCancellationRequested) StartThumbnailLoad(); };
+        viewer.Show();
     }
 
     /// <summary>가져온 이미지 바이트를 JPG로 변환한다. 실패하면 null을 돌려줘 원본을 유지한다.</summary>
     private static byte[]? ConvertToJpeg(byte[] src)
-    {
-        try
-        {
-            using var ms = new MemoryStream(src);
-            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-            if (decoder.Frames.Count == 0) return null;
-            BitmapSource frame = ApplyOrientation(decoder.Frames[0]);
-            var encoder = new JpegBitmapEncoder { QualityLevel = 92 };
-            encoder.Frames.Add(BitmapFrame.Create(frame));
-            using var outMs = new MemoryStream();
-            encoder.Save(outMs);
-            return outMs.ToArray();
-        }
-        catch { return null; }
-    }
-
-    /// <summary>EXIF 방향 태그를 픽셀에 반영해, 출력 JPG가 회전 태그 없이도 바르게 보이게 한다.</summary>
-    private static BitmapSource ApplyOrientation(BitmapFrame frame)
-    {
-        ushort o = 1;
-        try
-        {
-            if (frame.Metadata is BitmapMetadata md && md.ContainsQuery("System.Photo.Orientation"))
-            {
-                var v = md.GetQuery("System.Photo.Orientation");
-                if (v != null) o = Convert.ToUInt16(v);
-            }
-        }
-        catch { /* 방향 정보 없음 → 그대로 둔다 */ }
-
-        if (o is 0 or 1) return frame;
-
-        var g = new TransformGroup();
-        switch (o)
-        {
-            case 2: g.Children.Add(new ScaleTransform(-1, 1)); break;
-            case 3: g.Children.Add(new RotateTransform(180)); break;
-            case 4: g.Children.Add(new ScaleTransform(1, -1)); break;
-            case 5: g.Children.Add(new ScaleTransform(-1, 1)); g.Children.Add(new RotateTransform(90)); break;
-            case 6: g.Children.Add(new RotateTransform(90)); break;
-            case 7: g.Children.Add(new ScaleTransform(-1, 1)); g.Children.Add(new RotateTransform(270)); break;
-            case 8: g.Children.Add(new RotateTransform(270)); break;
-            default: return frame;
-        }
-        return new TransformedBitmap(frame, g);
-    }
+        => MediaPreview.ConvertToJpeg(src);
 
     private static bool IsWithinCheckBox(DependencyObject? d)
     {
@@ -331,7 +266,7 @@ public partial class MainWindow : Window
 
     private async void ShowPreviewFor(PhotoRow row)
     {
-        if (CurrentDevice == null) return;
+        if (CurrentDevice == null || _busy) return;
 
         _previewCts?.Cancel();
         var cts = new CancellationTokenSource();
@@ -340,55 +275,44 @@ public partial class MainWindow : Window
         PreviewCaption.Text = $"{row.FileName}\n{row.DateText}  ·  {row.SizeText}";
         PreviewImage.Source = null;
 
-        var ext = Path.GetExtension(row.FileName).ToLowerInvariant();
-        if (VideoExt.Contains(ext))
-        {
-            PreviewMsg.Text = "🎬 동영상 — 미리보기 미지원";
-            PreviewMsg.Visibility = Visibility.Visible;
-            return;
-        }
-
-        PreviewMsg.Text = "불러오는 중…";
+        var udid = CurrentDevice.Udid;
+        _thumbCts?.Cancel();
+        CancelBtn.IsEnabled = true;
+        PreviewMsg.Text = row.IsVideo ? "영상 대표 프레임을 불러오는 중…\n큰 영상은 시간이 걸릴 수 있습니다." : "불러오는 중…";
         PreviewMsg.Visibility = Visibility.Visible;
         try
         {
-            var bytes = await IPhoneClient.ReadFileBytesAsync(CurrentDevice.Udid, row.DevicePath, 64L * 1024 * 1024, cts.Token);
+            var img = row.IsVideo && row.Thumbnail is BitmapSource cached ? cached
+                : await MediaPreview.LoadAsync(udid, row.Item, 640, cts.Token);
             if (cts.IsCancellationRequested) return;
-
-            var img = TryDecode(bytes, 480);
-            if (img == null)
-            {
-                PreviewMsg.Text = "미리보기를 표시할 수 없습니다\n(HEIC 코덱 미설치 등)";
-                PreviewMsg.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                PreviewImage.Source = img;
-                PreviewMsg.Visibility = Visibility.Collapsed;
-            }
+            PreviewImage.Source = img;
+            row.Thumbnail ??= img;
+            row.PreviewError = null;
+            PreviewMsg.Visibility = Visibility.Collapsed;
+            if (row.IsVideo) PreviewCaption.Text += "\n영상 대표 프레임 · 가져온 뒤 재생 가능";
         }
-        catch (OperationCanceledException) { /* 다음 선택으로 취소됨 */ }
-        catch (System.Exception)
+        catch (OperationCanceledException)
         {
-            PreviewMsg.Text = "미리보기 실패";
+            if (ReferenceEquals(_previewCts, cts)) PreviewMsg.Text = "미리보기를 중지했습니다. 항목을 다시 선택하면 불러옵니다.";
+        }
+        catch (System.Exception ex)
+        {
+            if (cts.IsCancellationRequested) return;
+            PreviewMsg.Text = "미리보기를 읽지 못했습니다.\n잠금 해제 후 다시 선택하거나\n원본을 PC로 가져오세요.";
+            row.PreviewError = ex.Message;
             PreviewMsg.Visibility = Visibility.Visible;
         }
-    }
-
-    private static BitmapImage? TryDecode(byte[] bytes, int width)
-    {
-        try
+        finally
         {
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.StreamSource = new MemoryStream(bytes);
-            bmp.DecodePixelWidth = width; // 축소 디코딩 (미리보기 480 / 썸네일 160)
-            bmp.EndInit();
-            bmp.Freeze(); // UI 스레드 밖에서 만들어도 안전하게
-            return bmp;
+            if (ReferenceEquals(_previewCts, cts))
+            {
+                _previewCts = null;
+                if (!_busy) CancelBtn.IsEnabled = false;
+                if (!cts.IsCancellationRequested && !_busy && !_lifetime.IsCancellationRequested && PhotoGrid.Visibility == Visibility.Visible)
+                    StartThumbnailLoad();
+            }
+            cts.Dispose();
         }
-        catch { return null; }
     }
 
     // ───────────── 그리드(썸네일) 보기 ─────────────
@@ -408,47 +332,53 @@ public partial class MainWindow : Window
         StartThumbnailLoad();
     }
 
-    /// <summary>아직 썸네일이 없는 사진들을 AFC 연결 1개로 순차 다운로드·디코드한다.</summary>
+    /// <summary>사진 및 영상 미리보기를 순서대로 생성한다. 재시도와 취소는 현재 로드에만 반영한다.</summary>
     private async void StartThumbnailLoad()
     {
-        if (CurrentDevice == null) return;
-        var pending = _photos.Where(p => !p.IsVideo && p.Thumbnail == null && !p.ThumbRequested).ToList();
+        if (CurrentDevice == null || _busy) return;
+        _thumbCts?.Cancel();
+        var pending = _photos.Where(p => p.Thumbnail == null).ToList();
         if (pending.Count == 0) return;
-        foreach (var p in pending) p.ThumbRequested = true;
 
         var cts = new CancellationTokenSource();
         _thumbCts = cts;
+        CancelBtn.IsEnabled = true;
         var udid = CurrentDevice.Udid;
-        var map = pending.ToDictionary(p => p.DevicePath, p => p);
 
         int done = 0, ok = 0, fail = 0;
         StatusText.Text = $"썸네일 불러오는 중… (0/{pending.Count})";
         try
         {
-            await IPhoneClient.ReadFilesAsync(udid, pending.Select(p => p.DevicePath).ToList(), (path, bytes) =>
+            foreach (var row in pending)
             {
-                if (cts.IsCancellationRequested) return;
-                var img = TryDecode(bytes, 160);
-                Dispatcher.Invoke(() =>
+                cts.Token.ThrowIfCancellationRequested();
+                if (row.Thumbnail != null) { done++; ok++; continue; }
+                StatusText.Text = $"미리보기 {done + 1}/{pending.Count} · {row.FileName}";
+                try
                 {
-                    if (cts.IsCancellationRequested || _busy) return;
-                    if (img != null && map.TryGetValue(path, out var row)) { row.Thumbnail = img; ok++; }
-                    else fail++;
-                    done++;
-                    if (!cts.IsCancellationRequested)
-                        StatusText.Text = $"썸네일 {done}/{pending.Count}  (성공 {ok}, 실패 {fail})";
-                });
-            }, cts.Token);
+                    var img = await MediaPreview.LoadAsync(udid, row.Item, 480, cts.Token);
+                    cts.Token.ThrowIfCancellationRequested();
+                    row.Thumbnail = img; row.PreviewError = null; ok++;
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { row.PreviewError = ex.Message; fail++; }
+                done++;
+            }
             if (!cts.IsCancellationRequested)
                 StatusText.Text = fail > 0
-                    ? $"썸네일 완료 — 성공 {ok}, 실패 {fail} (실패는 대부분 HEIC 코덱 미설치)"
+                    ? $"미리보기 {ok}개 · 실패 {fail}개 — 항목을 선택하면 재시도합니다. 원본 가져오기도 가능합니다."
                     : $"썸네일 완료 — {ok}개";
         }
-        catch (OperationCanceledException) { }
-        catch (System.Exception) { StatusText.Text = "썸네일 일부 실패"; }
+        catch (OperationCanceledException)
+        {
+            if (ReferenceEquals(_thumbCts, cts) && !_busy && _previewCts == null)
+                StatusText.Text = "미리보기 불러오기를 중지했습니다. 그리드 보기를 다시 선택하면 이어서 불러옵니다.";
+        }
+        catch (System.Exception) { if (!cts.IsCancellationRequested) StatusText.Text = "썸네일 일부 실패"; }
         finally
         {
-            foreach (var row in pending) if (row.Thumbnail == null) row.ThumbRequested = false;
+            if (ReferenceEquals(_thumbCts, cts)) { _thumbCts = null; CancelBtn.IsEnabled = _busy || _previewCts != null; }
+            cts.Dispose();
         }
     }
 
@@ -613,10 +543,15 @@ public sealed class PhotoRow : INotifyPropertyChanged
         set { _thumb = value; OnChanged(nameof(Thumbnail)); }
     }
 
-    /// <summary>썸네일 다운로드를 이미 요청했는지(중복 로딩 방지).</summary>
-    internal bool ThumbRequested;
-
-    public string Placeholder => IsVideo ? "🎬" : "🖼";
+    private string? _previewError;
+    public string? PreviewError
+    {
+        get => _previewError;
+        set { _previewError = value; OnChanged(nameof(Placeholder)); OnChanged(nameof(Tooltip)); }
+    }
+    public string Tooltip => PreviewError == null ? FileName : FileName + "\n" + PreviewError;
+    public string Placeholder => PreviewError != null ? "미리보기 재시도\n항목을 선택하세요" : IsVideo ? "🎬" : "🖼";
+    public string MediaLabel => IsVideo ? "영상" : Path.GetExtension(FileName).TrimStart('.').ToUpperInvariant();
     public string FileName => Item.FileName;
     public string SizeText => Item.SizeText;
     public string DateText => Item.DateText;
