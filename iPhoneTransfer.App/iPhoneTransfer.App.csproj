@@ -11,7 +11,7 @@
 
     <AssemblyName>iPhoneTransfer</AssemblyName>
     <Product>iPhone 사진 전송기</Product>
-    <Version>2.4.0</Version>
+    <Version>2.5.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>appicon.ico</ApplicationIcon>
 

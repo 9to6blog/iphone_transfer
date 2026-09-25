@@ -56,7 +56,7 @@ try {
         [pscustomobject]@{Path=$_.FullName.Substring($distStage.Length+1);Bytes=$_.Length;SHA256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
     }
     $manifest | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $distStage 'manifest.json') -Encoding UTF8
-    @{Version='2.4.0';SourceCommit=$commit;CoreChecks='passed';MediaChecks='passed';UiChecks='passed';PhysicalIPhone='Not run by this release script; see README validation scope'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $distStage 'validation.json') -Encoding UTF8
+    @{Version='2.5.0';SourceCommit=$commit;CoreChecks='passed';MediaChecks='passed';UiChecks='passed';PhysicalIPhone='Not run by this release script; see README validation scope'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $distStage 'validation.json') -Encoding UTF8
     Compress-Archive -Path (Join-Path $distStage '*') -DestinationPath (Join-Path $stage 'iPhoneTransfer-dist.zip')
     & $Compiler /Qp ("/DAppSource=" + $appOut) ("/O" + $stage) (Join-Path $root 'installer.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Installer build failed; previous release is still intact' }

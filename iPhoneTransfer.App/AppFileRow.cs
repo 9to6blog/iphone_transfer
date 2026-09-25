@@ -18,6 +18,7 @@ public sealed class AppFileRow : INotifyPropertyChanged
     public string Kind => Item.Kind;
     public string SizeText => Item.SizeText;
     public string DateText => Item.DateText;
+    public bool HasModified => Item.Modified != default;
     public string MediaLabel => Item.IsDirectory ? "폴더" : IsVideo ? "영상" : System.IO.Path.GetExtension(Name).TrimStart('.').ToUpperInvariant();
     public string Detail => Item.IsDirectory ? "더블클릭으로 열기" : SizeText;
     public string Placeholder => Item.IsDirectory ? "📁" : Item.IsSymbolicLink ? "링크" : PreviewError != null

@@ -4,6 +4,8 @@ using System.Text.Json;
 using ImageMagick;
 using System.Buffers.Binary;
 using iPhoneTransfer.Core;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace iPhoneTransfer.App;
 
@@ -57,7 +59,7 @@ internal static class MediaVerification
             var path = Path.Combine(directory, codec + ".mov");
             // No faststart: exercise camera movies with the moov atom at the end.
             var start = new ProcessStartInfo(MediaPreview.FfmpegPath) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
-            foreach (var arg in new[] { "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=120x240:d=0.3", "-c:v", codec, "-threads", "2", "-pix_fmt", "yuv420p", path }) start.ArgumentList.Add(arg);
+            foreach (var arg in new[] { "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=s=120x240:d=1", "-c:v", codec, "-threads", "2", "-pix_fmt", "yuv420p", path }) start.ArgumentList.Add(arg);
             using var process = Process.Start(start)!;
             var error = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync(ct.Token);
@@ -66,11 +68,49 @@ internal static class MediaVerification
             checks.Add(codec + ": generated synthetic MOV fixture");
             var bitmap = await MediaPreview.VideoFrameAsync(path, 160, ct.Token);
             Check(bitmap.PixelWidth == 80 && bitmap.PixelHeight == 160, codec + ": MOV video thumbnail decodes without Windows codecs");
-            var ranges = new PaddedMovieReader(await File.ReadAllBytesAsync(path, ct.Token));
+            var original = await File.ReadAllBytesAsync(path, ct.Token);
+            var ranges = new PaddedMovieReader(original);
             var appFrame = await MediaPreview.VideoFrameFromReaderAsync(ranges, "app.MOV", 160, ct.Token);
             Check(appFrame.PixelWidth == 80 && appFrame.PixelHeight == 160, codec + ": video thumbnail decodes through random-access ranges");
-            Check(ranges.BytesRead < 1024 * 1024 && ranges.ReadTail && ranges.ReadHead && ranges.Length > 500_000_000,
+            Check(Pixels(bitmap).SequenceEqual(Pixels(appFrame)), codec + ": extracted first sample matches the original first frame pixel for pixel");
+            Check(ranges.BytesRead < 64 * 1024 && ranges.ReadTail && ranges.ReadHead && ranges.Length > 500_000_000,
                 codec + $": large MOV with trailing metadata reads only {ranges.BytesRead} of {ranges.Length} bytes");
+            var sampleSource = new PaddedMovieReader(original);
+            var clip = FirstMovieFrame.Read(sampleSource, ct.Token);
+            var sampleSizes = FindAtom(clip.Bytes, "moov", "trak", "mdia", "minf", "stbl", "stsz");
+            var mediaData = FindAtom(clip.Bytes, "mdat");
+            Check(BinaryPrimitives.ReadUInt32BigEndian(clip.Bytes.AsSpan(sampleSizes + 16)) == 1 &&
+                BinaryPrimitives.ReadUInt32BigEndian(clip.Bytes.AsSpan(mediaData)) - 8 == clip.SampleBytes &&
+                sampleSource.BytesRead == clip.MetadataBytes + clip.SampleBytes,
+                codec + ": temporary clip contains exactly one sample and USB reads equal metadata plus that sample");
+            var roundTrip = FirstMovieFrame.Read(new MemoryMediaReader(clip.Bytes), ct.Token);
+            Check(roundTrip.SampleBytes == clip.SampleBytes && roundTrip.Bytes.SequenceEqual(clip.Bytes),
+                codec + ": faststart movie with 64-bit chunk offsets preserves the first sample");
+            var brokenOffset = (byte[])original.Clone();
+            var chunks = FindAtom(brokenOffset, "moov", "trak", "mdia", "minf", "stbl", "stco");
+            BinaryPrimitives.WriteUInt32BigEndian(brokenOffset.AsSpan(chunks + 16), uint.MaxValue);
+            try { FirstMovieFrame.Read(new PaddedMovieReader(brokenOffset), ct.Token); throw new Exception("Invalid sample position accepted"); }
+            catch (IOException) { checks.Add(codec + ": sample offset beyond EOF is rejected before reading video data"); }
+            var nonSync = (byte[])original.Clone();
+            var sync = FindAtom(nonSync, "moov", "trak", "mdia", "minf", "stbl", "stss");
+            BinaryPrimitives.WriteUInt32BigEndian(nonSync.AsSpan(sync + 16), 2);
+            try { FirstMovieFrame.Read(new PaddedMovieReader(nonSync), ct.Token); throw new Exception("Dependent first sample accepted"); }
+            catch (FirstMovieFrame.Unsupported) { checks.Add(codec + ": first sample must be independently decodable"); }
+        }
+        foreach (var extension in new[] { ".avi", ".mkv" })
+        {
+            var path = Path.Combine(directory, "fallback" + extension);
+            var start = new ProcessStartInfo(MediaPreview.FfmpegPath) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+            foreach (var arg in new[] { "-y", "-hide_banner", "-loglevel", "error", "-i", Path.Combine(directory, "libx264.mov"), "-c", "copy", path }) start.ArgumentList.Add(arg);
+            using var process = Process.Start(start)!;
+            var errors = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync(ct.Token);
+            if (process.ExitCode != 0) throw new IOException(await errors);
+            await errors;
+            var source = new MemoryMediaReader(await File.ReadAllBytesAsync(path, ct.Token));
+            var frame = await MediaPreview.VideoFrameFromReaderAsync(source, "fallback" + extension, 160, ct.Token);
+            Check(frame.PixelWidth == 80 && frame.PixelHeight == 160 && source.BytesRead <= 512 * 1024,
+                extension + ": non-MOV video still decodes within the small range fallback budget");
         }
         bool copiedMovie = false;
         try
@@ -123,6 +163,46 @@ internal static class MediaVerification
         public long Length => 1L << 30;
         public long BytesRead => 0;
         public int ReadAt(long offset, byte[] buffer, int count, CancellationToken ct) => throw new IOException("USB fixture failure");
+    }
+
+    private sealed class MemoryMediaReader(byte[] bytes) : IMediaReader
+    {
+        public long Length => bytes.Length;
+        public long BytesRead { get; private set; }
+        public int ReadAt(long offset, byte[] buffer, int count, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            int n = (int)Math.Min(count, bytes.Length - offset);
+            bytes.AsSpan((int)offset, n).CopyTo(buffer); BytesRead += n; return n;
+        }
+    }
+
+    private static byte[] Pixels(BitmapSource source)
+    {
+        var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        var bytes = new byte[converted.PixelWidth * converted.PixelHeight * 4];
+        converted.CopyPixels(bytes, converted.PixelWidth * 4, 0);
+        return bytes;
+    }
+
+    // Fixture-only atom traversal; these generated fixtures use 32-bit atom sizes.
+    private static int FindAtom(byte[] bytes, params string[] path)
+    {
+        int begin = 0, end = bytes.Length, found = -1;
+        foreach (var name in path)
+        {
+            found = -1;
+            for (int at = begin; at + 8 <= end;)
+            {
+                int size = checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(at)));
+                if (size < 8 || size > end - at) throw new IOException("Invalid test atom");
+                if (System.Text.Encoding.ASCII.GetString(bytes, at + 4, 4) == name)
+                { found = at; begin = at + 8; end = at + size; break; }
+                at += size;
+            }
+            if (found < 0) throw new IOException("Test atom missing: " + name);
+        }
+        return found;
     }
 
     // A valid MOV with a virtual 512 MiB free atom before its trailing moov metadata.

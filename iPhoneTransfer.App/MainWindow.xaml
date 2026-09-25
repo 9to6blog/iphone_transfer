@@ -69,7 +69,7 @@
   <Grid.ColumnDefinitions><ColumnDefinition Width="202"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
   <Border Background="#14243A"><DockPanel Margin="20,28,20,24">
    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,34"><Border Background="#2864EA" CornerRadius="13" Width="44" Height="44" HorizontalAlignment="Left"><TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="iPhoneTransfer" Foreground="White" FontSize="19" FontWeight="Bold" Margin="0,16,0,6"/><TextBlock Text="사진과 파일, 편안하게." Foreground="#95A8C3" FontSize="12"/></StackPanel>
-   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.4" FontSize="10" Foreground="#738DAE"/></StackPanel>
+   <StackPanel DockPanel.Dock="Bottom"><Border Height="1" Background="#2A3B53" Margin="0,0,0,18"/><TextBlock Text="USB로 안전하게 전송" Foreground="#CAD5E5" FontWeight="SemiBold"/><TextBlock Text="아이폰 원본은 그대로 보관됩니다." Foreground="#8EA3BE" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,18"/><TextBlock Text="VERSION 2.5" FontSize="10" Foreground="#738DAE"/></StackPanel>
    <StackPanel><TextBlock Text="WORKSPACE" Foreground="#738DAE" FontSize="10" Margin="10,0,0,14"/>
     <Button x:Name="PhotosNav" Style="{StaticResource NavButton}" Content="사진 가져오기" Tag="0" Click="Navigate_Click"/>
     <Button x:Name="SendNav" Style="{StaticResource NavButton}" Content="앱 파일" Tag="1" Click="Navigate_Click"/>
@@ -237,6 +237,9 @@
                           <Button x:Name="AppSelectAllBtn" Content="모두 선택" Click="AppSelectAll_Click"/>
                           <Button x:Name="AppClearSelectionBtn" Content="선택 해제" Click="AppClearSelection_Click"/>
                           <Button x:Name="AppLargePreviewBtn" Content="크게 보기" Click="AppLargePreview_Click" IsEnabled="False"/>
+                          <ComboBox x:Name="AppSortCombo" Width="160" SelectedIndex="0" Margin="0,0,0,6" SelectionChanged="AppSort_SelectionChanged" ToolTip="앱이 제공한 수정 날짜로 정렬합니다. 촬영 날짜와 다를 수 있습니다.">
+                            <ComboBoxItem Content="최신순 (수정일)"/><ComboBoxItem Content="오래된순"/><ComboBoxItem Content="이름순"/>
+                          </ComboBox>
                         </WrapPanel>
                         <TextBlock x:Name="AppFolderText" Grid.Row="1" Text="/Documents" Foreground="#64748B" TextTrimming="CharacterEllipsis" Margin="0,0,0,4"/>
                         <Grid Grid.Row="2">

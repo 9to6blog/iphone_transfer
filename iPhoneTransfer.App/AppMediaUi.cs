@@ -52,8 +52,7 @@ public partial class MainWindow
         var device = _appFilesDevice; var bundle = _appFilesBundle;
         if (device == null || bundle == null || !AppContextValid(device, bundle) || _appPreviewCts != null || _appViewer != null) return;
         _appThumbCts?.Cancel();
-        var pending = _appFiles.Where(r => r.CanPreview && r.Thumbnail == null && r.PreviewError == null)
-            .OrderBy(r => r.IsVideo).ThenBy(r => r.Item.Size).ToArray();
+        var pending = AppFileList.Items.Cast<AppFileRow>().Where(r => r.CanPreview && r.Thumbnail == null && r.PreviewError == null).ToArray();
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _appThumbCts = cts;
         CancelBtn.IsEnabled = pending.Length > 0;
@@ -149,7 +148,8 @@ public partial class MainWindow
         var device = _appFilesDevice; var bundle = _appFilesBundle;
         if (!row.CanPreview || device == null || bundle == null || !AppContextValid(device, bundle)) return;
         CancelAppMedia();
-        var viewer = new ImageViewerWindow(row.Name, ct => _appMediaLoader(device, bundle, row.Item, row.IsVideo ? 1920 : 0, ct)) { Owner = this };
+        var viewer = new ImageViewerWindow(row.Name, ct => row.IsVideo && row.Thumbnail is BitmapSource frame
+            ? Task.FromResult(frame) : _appMediaLoader(device, bundle, row.Item, row.IsVideo ? 1920 : 0, ct)) { Owner = this };
         _appViewer = viewer;
         viewer.Closed += (_, _) => { if (_appViewer == viewer) { _appViewer = null; StartAppThumbnailLoad(); } };
         viewer.Show();

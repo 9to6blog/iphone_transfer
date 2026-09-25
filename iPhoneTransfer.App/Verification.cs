@@ -87,16 +87,29 @@ public partial class MainWindow
         _appFiles.Add(new("/Documents/자료/문서", "문서", true, 0, DateTime.Today));
         _appFiles.Add(new("/Documents/자료/book.epub", "book.epub", false, 2_500_000, DateTime.Today));
         _appFiles.Add(new("/Documents/자료/notes.pdf", "notes.pdf", false, 128_000, DateTime.Today));
-        var appPhoto = new AppFileRow("/Documents/자료/풍경.HEIC", "풍경.HEIC", false, 718114, DateTime.Today);
-        var appVideo = new AppFileRow("/Documents/자료/촬영.MOV", "촬영.MOV", false, 2718114, DateTime.Today);
-        _appFiles.Add(appPhoto); _appFiles.Add(appVideo);
+        var appPhoto = new AppFileRow("/Documents/자료/풍경.HEIC", "풍경.HEIC", false, 718114, DateTime.Today.AddDays(1));
+        var appVideo = new AppFileRow("/Documents/자료/촬영.MOV", "촬영.MOV", false, 2718114, DateTime.Today.AddDays(2));
+        var unknownDate = new AppFileRow("/Documents/자료/unknown.txt", "unknown.txt", false, 42, default);
+        _appFiles.Add(appPhoto); _appFiles.Add(appVideo); _appFiles.Add(unknownDate);
         AppFilesEmpty.Visibility = Visibility.Collapsed;
         StartAppThumbnailLoad();
         Check(appPhoto.Thumbnail != null && appVideo.Thumbnail != null && appRequests.Count == 2 && appRequests.All(r => r.StartsWith("fixture.read:/Documents/")),
             "App grid loads photo and video thumbnails from the selected app, excluding folders and documents");
+        Check(AppSortCombo.SelectedIndex == 0 && AppFileList.Items[0] == appVideo && AppFileList.Items[1] == appPhoto &&
+            AppFileList.Items[^1] == unknownDate && appRequests[0].EndsWith(appVideo.DevicePath),
+            "Newest app files and their thumbnails come first, even when a newer video is larger than an older image");
         AppFileList.SelectAll();
-        Check(ImportAppFilesBtn.IsEnabled && AppParentBtn.IsEnabled && AppFileList.SelectedItems.Count == 5, "App files support multi-selection and parent navigation");
+        Check(ImportAppFilesBtn.IsEnabled && AppParentBtn.IsEnabled && AppFileList.SelectedItems.Count == 6, "App files support multi-selection and parent navigation");
+        Check(SelectedAppItemsInDisplayOrder().SequenceEqual(AppFileList.Items.Cast<AppFileRow>()), "App import follows the visible sort order");
         AppFileList.UnselectAll(); AppFileList.SelectedItem = appPhoto;
+        var selectedPreview = AppPreviewImage.Source;
+        AppSortCombo.SelectedIndex = 1;
+        Check(AppFileList.Items[^1] == unknownDate && AppFileList.Items[0] != appVideo &&
+            AppFileList.SelectedItem == appPhoto && AppPreviewImage.Source == selectedPreview,
+            "Oldest-first keeps unknown dates last and preserves selected photo and preview");
+        AppSortCombo.SelectedIndex = 2;
+        Check(AppFileList.Items[0] is AppFileRow { Name: "book.epub" }, "Name sort remains available");
+        AppSortCombo.SelectedIndex = 0;
         AppFileList.ScrollIntoView(appPhoto);
         Check(AppPreviewImage.Source != null && AppLargePreviewBtn.IsEnabled && AppFileList.View == null && AppFileList.ItemTemplate != null,
             "App grid is the default and selected HEIC has a side preview and enlarged-view action");
@@ -112,6 +125,11 @@ public partial class MainWindow
         AppGridRadio.IsChecked = true;
         AppFileList.SelectedItem = appVideo;
         Check(AppPreviewCaption.Text.Contains("영상 대표 화면"), "App video preview is clearly labeled as a representative frame");
+        var readsBeforeEnlarge = appRequests.Count;
+        OpenAppLargeView(appVideo);
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(appRequests.Count == readsBeforeEnlarge, "Enlarging an app video reuses its grid frame even after the shared cache expires");
+        _appViewer!.Close();
         var stalePreview = new TaskCompletionSource<BitmapSource>(TaskCreationOptions.RunContinuationsAsynchronously);
         _appMediaLoader = (_, _, _, _, _) => stalePreview.Task; // Simulate a native read returning after cancellation.
         appVideo.Thumbnail = null;
@@ -121,7 +139,7 @@ public partial class MainWindow
         await loadingPreview;
         Check(AppPreviewImage.Source == null && _appPreviewCts == null, "Canceled app preview cannot publish a late image");
         SetBusy(true, "앱 가져오기 검증");
-        Check(!ImportAppFilesBtn.IsEnabled && !AppCombo.IsEnabled && !AppParentBtn.IsEnabled && !AppSendRadio.IsEnabled, "App import locks app, direction and navigation until complete");
+        Check(!ImportAppFilesBtn.IsEnabled && !AppCombo.IsEnabled && !AppParentBtn.IsEnabled && !AppSendRadio.IsEnabled && !AppSortCombo.IsEnabled, "App import locks app, sort, direction and navigation until complete");
         SetBusy(false, "준비 완료");
         AppSendRadio.IsChecked = true;
         Check(AppSendPane.Visibility == Visibility.Visible && AppReadPane.Visibility == Visibility.Collapsed, "Existing app upload remains accessible");
@@ -197,14 +215,18 @@ internal static class DeviceVerification
         {
             Task<BitmapSource> Load(int width) => app == null ? MediaPreview.LoadAsync(device.Udid, item, width, ct.Token)
                 : MediaPreview.LoadAppAsync(device.Udid, app, new(item.DevicePath, item.FileName, false, item.Size, item.Modified), width, ct.Token);
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
             var frame = await Load(480);
+            elapsed.Stop();
             var first = MediaPreview.LastVideoRead!;
             var again = await Load(1920);
             var second = MediaPreview.LastVideoRead!;
-            if (first.UsbBytes > 16L * 1024 * 1024 || !second.CacheHit || second.UsbBytes != 0 || !ReferenceEquals(frame, again))
+            if (first.UsbBytes > 16L * 1024 * 1024 || !second.CacheHit || second.UsbBytes != 0 || !ReferenceEquals(frame, again) ||
+                (first.FirstFrameBytes.HasValue && first.UsbBytes != first.FirstFrameBytes + first.MetadataBytes))
                 throw new IOException("영상 부분 읽기/캐시 검증에 실패했습니다.");
             reports.Add(new { source = app == null ? "camera" : "app", first.SourceBytes, first.UsbBytes,
                 percentRead = Math.Round(first.UsbBytes * 100.0 / first.SourceBytes, 3), repeatedReadBytes = second.UsbBytes,
+                first.FirstFrameBytes, first.MetadataBytes, milliseconds = elapsed.ElapsedMilliseconds,
                 width = frame.PixelWidth, height = frame.PixelHeight, fullMovieCopied = false });
         }
     }

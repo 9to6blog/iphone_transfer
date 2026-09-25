@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         PhotoGrid.ItemsSource = _photos;
         FilesToSend.ItemsSource = _filesToSend;
         AppFileList.ItemsSource = _appFiles;
+        ApplyAppSort();
         _filesToSend.CollectionChanged += (_, _) =>
             DropHint.Visibility = _filesToSend.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ViewGridRadio.IsChecked = true;   // 그리드(썸네일)를 기본 보기로
@@ -72,6 +73,7 @@ public partial class MainWindow : Window
         FilesToSend.AllowDrop = !busy;
         AppReadRadio.IsEnabled = AppSendRadio.IsEnabled = !busy;
         AppGridRadio.IsEnabled = AppListRadio.IsEnabled = !busy;
+        AppSortCombo.IsEnabled = !busy;
         AppFileList.IsEnabled = !busy;
         UpdateAppBrowserButtons();
     }

@@ -13,7 +13,7 @@ internal static class MediaPreview
     private sealed record VideoKey(string Device, string? App, string Path, long Size, DateTime Modified);
     private static readonly Dictionary<VideoKey, BitmapSource> VideoCache = new();
     private static readonly Queue<VideoKey> VideoOrder = new();
-    internal sealed record VideoReadStats(long SourceBytes, long UsbBytes, bool CacheHit);
+    internal sealed record VideoReadStats(long SourceBytes, long UsbBytes, bool CacheHit, int? FirstFrameBytes = null, long? MetadataBytes = null);
     internal static VideoReadStats? LastVideoRead { get; private set; }
     internal static string FfmpegPath => Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
     internal static bool IsVideo(string name) => Path.GetExtension(name).ToLowerInvariant() is ".mov" or ".mp4" or ".m4v" or ".avi" or ".mkv" or ".webm";
@@ -39,8 +39,10 @@ internal static class MediaPreview
             var bitmap = await IPhoneClient.WithMediaReaderAsync(udid, bundleId, item,
                 async reader =>
                 {
-                    var frame = await VideoFrameFromReaderAsync(reader, item.FileName, 640, ct);
-                    LastVideoRead = new(reader.Length, reader.BytesRead, false);
+                    int? sampleBytes = null; long? metadataBytes = null;
+                    var frame = await VideoFrameFromReaderAsync(reader, item.FileName, 640, ct,
+                        (sample, metadata) => { sampleBytes = sample; metadataBytes = metadata; });
+                    LastVideoRead = new(reader.Length, reader.BytesRead, false, sampleBytes, metadataBytes);
                     return frame;
                 }, ct);
             ct.ThrowIfCancellationRequested();
@@ -51,13 +53,46 @@ internal static class MediaPreview
         finally { Gate.Release(); }
     }
 
-    internal static async Task<BitmapSource> VideoFrameFromReaderAsync(IMediaReader reader, string name, int width, CancellationToken ct)
+    internal static async Task<BitmapSource> VideoFrameFromReaderAsync(IMediaReader reader, string name, int width, CancellationToken ct,
+        Action<int, long>? firstSampleRead = null)
     {
-        await using var server = new VideoRangeServer(reader, ct);
+        ct.ThrowIfCancellationRequested();
+        if (Path.GetExtension(name).ToLowerInvariant() is ".mov" or ".mp4" or ".m4v")
+        {
+            FirstMovieFrame.Clip? clip = null;
+            try { clip = await Task.Run(() => FirstMovieFrame.Read(reader, ct), ct); }
+            catch (FirstMovieFrame.Unsupported) { /* Other codecs/fragmented movies use the small, bounded fallback below. */ }
+            if (clip != null)
+            {
+                firstSampleRead?.Invoke(clip.SampleBytes, clip.MetadataBytes);
+                var folder = Path.Combine(Path.GetTempPath(), "iPhoneTransfer-preview", Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.CreateDirectory(folder);
+                    var path = Path.Combine(folder, "first-frame.mp4");
+                    await File.WriteAllBytesAsync(path, clip.Bytes, ct);
+                    return await VideoFrameAsync(path, width, ct);
+                }
+                finally { try { if (Directory.Exists(folder)) Directory.Delete(folder, true); } catch { } }
+            }
+        }
+        await using var server = new VideoRangeServer(new PreviewReadBudget(reader), ct);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, server.Failure);
         try { return await VideoFrameAsync(server.Url, width, lifetime.Token, name); }
         catch (Exception) when (server.Error != null && !ct.IsCancellationRequested)
         { throw new IOException("영상 썸네일을 부분 읽기로 만들지 못했습니다. 전체 영상은 다운로드하지 않습니다.", server.Error); }
+    }
+
+    // A fallback must not quietly grow into another large metadata scan.
+    private sealed class PreviewReadBudget(IMediaReader source) : IMediaReader
+    {
+        public long Length => source.Length;
+        public long BytesRead => source.BytesRead;
+        public int ReadAt(long offset, byte[] buffer, int count, CancellationToken ct)
+        {
+            if (source.BytesRead + count > 512 * 1024) throw new IOException("빠른 썸네일 읽기 한도에 도달했습니다. 원본을 가져와 재생해 주세요.");
+            return source.ReadAt(offset, buffer, count, ct);
+        }
     }
 
     internal static async Task<BitmapSource> LoadFileAsync(string name, int width,
@@ -139,7 +174,7 @@ internal static class MediaPreview
             var format = Path.GetExtension(remoteName).ToLowerInvariant() switch { ".avi" => "avi", ".mkv" or ".webm" => "matroska", _ => "mov" };
             foreach (var arg in new[] { "-http_proxy", "", "-protocol_whitelist", "http,tcp", "-request_size", "65536",
                 "-initial_request_size", "65536", "-short_seek_size", "65536", "-multiple_requests", "0", "-seekable", "1",
-                "-probesize", "262144", "-analyzeduration", "100000", "-f", format }) start.ArgumentList.Add(arg);
+                "-nofind_stream_info", "-probesize", "32", "-fpsprobesize", "0", "-analyzeduration", "1", "-f", format }) start.ArgumentList.Add(arg);
         }
         foreach (var arg in new[] { "-i", path, "-map", "0:v:0", "-frames:v", "1", "-vf",
                      $"scale={width}:{width}:force_original_aspect_ratio=decrease", "-threads", "2",

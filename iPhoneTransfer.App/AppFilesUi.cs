@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using iPhoneTransfer.Core;
 using Microsoft.Win32;
+using System.ComponentModel;
+using System.Windows.Data;
 
 namespace iPhoneTransfer.App;
 
@@ -12,6 +14,36 @@ public partial class MainWindow
     private readonly ObservableCollection<AppFileRow> _appFiles = new();
     private string _appDirectory = "/Documents";
     private string? _appFilesBundle, _appFilesDevice, _appImportFolder;
+    private bool _sortingAppFiles;
+
+    private void AppSort_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyAppSort();
+
+    private void ApplyAppSort()
+    {
+        if (AppFileList?.ItemsSource == null || AppSortCombo == null) return;
+        _appThumbCts?.Cancel(); _appThumbCts = null;
+        _sortingAppFiles = true;
+        try
+        {
+            var view = CollectionViewSource.GetDefaultView(_appFiles);
+            using (view.DeferRefresh())
+            {
+                view.SortDescriptions.Clear();
+                if (AppSortCombo.SelectedIndex != 2)
+                {
+                    view.SortDescriptions.Add(new(nameof(AppFileRow.HasModified), ListSortDirection.Descending));
+                    view.SortDescriptions.Add(new("Item.Modified", AppSortCombo.SelectedIndex == 1 ? ListSortDirection.Ascending : ListSortDirection.Descending));
+                }
+                view.SortDescriptions.Add(new(nameof(AppFileRow.Name), ListSortDirection.Ascending));
+            }
+        }
+        finally { _sortingAppFiles = false; }
+        UpdateAppBrowserButtons();
+        StartAppThumbnailLoad();
+    }
+
+    private AppFileRow[] SelectedAppItemsInDisplayOrder() => AppFileList.Items.Cast<AppFileRow>()
+        .Where(row => AppFileList.SelectedItems.Contains(row)).ToArray();
 
     private void AppDirection_Checked(object sender, RoutedEventArgs e)
     {
@@ -61,6 +93,7 @@ public partial class MainWindow
     private async void AppFileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateAppBrowserButtons();
+        if (_sortingAppFiles) return;
         if (AppFileList.SelectedItems.Count == 1 && AppFileList.SelectedItem is AppFileRow row) await ShowAppPreviewAsync(row);
         else { CancelAppSelectedPreview(); ClearAppPreview(); StartAppThumbnailLoad(); }
     }
@@ -107,7 +140,7 @@ public partial class MainWindow
     {
         if (_busy || !RequireDevice() || AppCombo.SelectedItem is not SharingApp app ||
             app.BundleId != _appFilesBundle || CurrentDevice!.Udid != _appFilesDevice) return;
-        var selected = AppFileList.SelectedItems.Cast<AppFileRow>().ToArray();
+        var selected = SelectedAppItemsInDisplayOrder();
         if (selected.Length == 0) return;
         var dialog = new OpenFolderDialog { Title = "앱 파일을 저장할 PC 폴더 선택" };
         if (_appImportFolder != null) dialog.InitialDirectory = _appImportFolder;
